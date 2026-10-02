@@ -1,0 +1,25 @@
+[Unit]
+Description=H2H Pocket interactive website
+After=network.target
+
+[Service]
+Type=simple
+User=www
+Group=www
+WorkingDirectory=/www/wwwroot/ai-passport.randomdance.cn/current
+Environment=H2H_ORIGIN=https://ai-passport.randomdance.cn
+Environment=H2H_DATA_DIR=/www/wwwroot/ai-passport.randomdance.cn/shared/data
+EnvironmentFile=-/www/wwwroot/ai-passport.randomdance.cn/shared/passport-sso.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/www/wwwroot/ai-passport.randomdance.cn/shared/venv/bin/gunicorn --pythonpath tools/h2h --bind 127.0.0.1:8878 --workers 1 --threads 8 --timeout 30 --error-logfile - web_server:create_app()
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/www/wwwroot/ai-passport.randomdance.cn/shared/data
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

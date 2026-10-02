@@ -1,0 +1,19 @@
+<view class="page">
+  <view class="hero"><view class="eyebrow">RANDOM DANCE · AI PASSPORT</view><view class="heading">我的 AI 通行证</view><view>扫码绑定卡片，选择官方主题，决定是否公开 NFC 信息卡。</view></view>
+  <view wx:if="{{!loggedIn}}" class="panel"><view>请先登录随机舞蹈中文站账号。</view><button bindtap="openLogin">去登录</button></view>
+  <block wx:else>
+    <button class="pair" loading="{{busy}}" disabled="{{busy}}" bindtap="scanPairing">扫描卡片绑定二维码</button>
+    <view class="panel"><view class="device-title">连接卡片蓝牙</view><view class="muted">请在卡片账户页打开蓝牙。配对时，把卡片屏幕显示的六位码输入手机。</view><button disabled="{{busy}}" bindtap="scanBluetooth">搜索附近卡片</button><view wx:for="{{nearby}}" wx:key="deviceId"><button data-id="{{item.deviceId}}" disabled="{{busy}}" bindtap="connectBluetooth">连接 {{item.name}}</button></view><view wx:if="{{connectedId}}"><view class="muted">已连接 · {{connectedId}}</view><input placeholder="2.4 GHz Wi-Fi 名称" value="{{wifiSsid}}" bindinput="onWifiSsid"/><input placeholder="Wi-Fi 密码" password value="{{wifiPassword}}" bindinput="onWifiPassword"/><button disabled="{{busy}}" bindtap="provisionWifi">发送 Wi-Fi 信息</button></view></view>
+    <view wx:if="{{loading}}" class="muted">正在读取设备…</view>
+    <view wx:if="{{message}}" class="notice">{{message}}</view>
+    <view wx:if="{{!loading && !devices.length}}" class="panel muted">还没有绑定的卡片。绑定二维码会在卡片端显示，扫码后还需在卡片上确认。</view>
+    <view wx:for="{{devices}}" wx:key="id" wx:for-index="index" class="panel">
+      <view class="device-title">设备 · {{item.shortId}}</view>
+      <view class="muted">当前主题：{{item.applied_theme}}</view>
+      <view class="field">选择官方主题</view>
+      <picker mode="selector" range="{{item.themeOptions}}" value="{{item.themeIndex}}" data-index="{{index}}" bindchange="changeTheme" disabled="{{busy}}"><view class="selector">{{item.themeOptions[item.themeIndex]}}　⌄</view></picker>
+      <view class="muted">主题选择保存后，连接卡片蓝牙并手动开始下载。</view>
+      <view class="actions"><button size="mini" data-index="{{index}}" disabled="{{busy || connectedId !== item.id}}" bindtap="refreshTheme">蓝牙刷新主题</button><button size="mini" data-index="{{index}}" disabled="{{busy}}" bindtap="toggleCard">{{item.card_public ? '关闭公开卡片' : '公开 NFC 卡片'}}</button><button size="mini" data-index="{{index}}" bindtap="copyCard">复制卡片链接</button><button size="mini" data-index="{{index}}" disabled="{{busy}}" bindtap="unbind">解绑</button></view>
+    </view>
+  </block>
+</view>

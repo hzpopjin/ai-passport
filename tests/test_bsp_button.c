@@ -67,13 +67,13 @@ esp_err_t iot_button_delete(button_handle_t h) {
     h->live = false; --live_buttons; return ESP_OK;
 }
 esp_err_t iot_button_register_cb(button_handle_t h, button_event_t ev, button_event_args_t *args, button_cb_t cb, void *u) {
-    (void)args; (void)ev;
+    if (ev == BUTTON_MULTIPLE_CLICK) assert(args && args->multiple_clicks.clicks == 3);
     assert(h->live);
     cb(h, u); // No user callbacks may escape a partial initialization.
     return ++callback_calls == fail_callback ? ESP_ERR_NO_MEM : ESP_OK;
 }
 static void event_cb(bsp_btn_t btn, bsp_btn_ev_t ev, void *u) {
-    assert(btn == BSP_BTN_OK && ev == BSP_BTN_CLICK && u == &events);
+    assert(btn == BSP_BTN_OK && (ev == BSP_BTN_CLICK || ev == BSP_BTN_TRIPLE) && u == &events);
     ++events;
 }
 static void reset_faults(void) {
@@ -105,7 +105,7 @@ int main(void) {
         reset_faults(); fail_create = i;
         assert(bsp_button_init(event_cb, &events) != ESP_OK); retry_success();
     }
-    for (int i = 1; i <= BSP_BTN_COUNT * 4; ++i) {
+    for (int i = 1; i <= BSP_BTN_COUNT * 5; ++i) {
         reset_faults(); fail_callback = i;
         assert(bsp_button_init(event_cb, &events) != ESP_OK); retry_success();
     }
@@ -118,6 +118,7 @@ int main(void) {
     assert(events == 0);
     assert(bsp_button_init(event_cb, &events) == ESP_OK);
     cb_click(NULL, (void *)(intptr_t)BSP_BTN_OK); assert(events == 1);
+    cb_triple(NULL, (void *)(intptr_t)BSP_BTN_OK); assert(events == 2);
     check_voltage(0, BSP_BTN_UP); check_voltage(149, BSP_BTN_UP);
     check_voltage(150, BSP_BTN_DOWN); check_voltage(446, BSP_BTN_DOWN);
     check_voltage(447, BSP_BTN_OK); check_voltage(1899, BSP_BTN_OK);

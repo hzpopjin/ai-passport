@@ -11,3 +11,10 @@ managed_components/
 /.agents/skills/passport-build
 /.agents/skills/passport-device-test
 /.agents/skills/passport-debug
+
+# Personal listening resources are regenerated locally, not redistributed.
+/assets/music/h2h/*.ogg
+/assets/music/h2h/*.bin
+
+__pycache__/
+.DS_Store

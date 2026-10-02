@@ -1,0 +1,468 @@
+--- a/src/app.module.ts
++++ b/src/app.module.ts
+@@ -87,6 +87,8 @@
+ } from './modules/notification-center/entities/notification-center.entity';
+ import { NotificationSubscription } from './modules/notification-center/entities/notification-subscription.entity';
+ import { NotificationLegacyMap } from './modules/notification-center/entities/notification-legacy-map.entity';
++import { PassportModule } from './modules/passport/passport.module';
++import { PassportDevice, PassportPairing } from './modules/passport/passport.entity';
+ 
+ @Module({
+   imports: [
+@@ -167,6 +169,8 @@
+           NotificationCenterSetting,
+           NotificationSubscription,
+           NotificationLegacyMap,
++          PassportDevice,
++          PassportPairing,
+         ],
+         // Apply reviewed migrations explicitly; only disposable development databases opt in.
+         synchronize: config.get<string>('DB_SYNCHRONIZE', 'false') === 'true',
+@@ -198,6 +202,7 @@
+     PushNotificationModule,
+     MusicAccessModule,
+     NotificationCenterModule,
++    PassportModule,
+   ],
+ })
+ export class AppModule {}
+--- a/src/modules/system-logs/system-log.service.ts
++++ b/src/modules/system-logs/system-log.service.ts
+@@ -335,7 +335,7 @@
+       const fundTransferPath = isFundTransferPath(input.path);
+       // User search terms can be complete OpenIDs/UnionIDs; keep auth and user
+       // administration logs metadata-only, just like marketing registration.
+-      const identityPath = /^\/api\/v1\/(?:auth|admin\/users)(?:\/|$)/i.test(path || '');
++      const identityPath = /^\/api\/v1\/(?:auth|admin\/users|passport)(?:\/|$)/i.test(path || '');
+       const metadataOnly = fundTransferPath || identityPath;
+       const log = this.systemLogRepo.create({
+         level: input.level,
+--- a/src/modules/passport/passport.entity.ts
++++ b/src/modules/passport/passport.entity.ts
+@@ -0,0 +1,25 @@
++import { Column, CreateDateColumn, Entity, Index, PrimaryColumn, UpdateDateColumn } from 'typeorm';
++
++@Entity('passport_devices')
++export class PassportDevice {
++  @PrimaryColumn({ type: 'char', length: 32 }) id: string;
++  @Column({ type: 'char', length: 64 }) credential_hash: string;
++  @Index() @Column({ type: 'int', nullable: true }) owner_id: number | null;
++  @Index({ unique: true }) @Column({ type: 'char', length: 32 }) card_slug: string;
++  @Column({ type: 'boolean', default: false }) card_public: boolean;
++  @Column({ type: 'varchar', length: 64, default: 'classic' }) desired_theme: string;
++  @Column({ type: 'varchar', length: 64, default: 'classic' }) applied_theme: string;
++  @CreateDateColumn() created_at: Date;
++  @UpdateDateColumn() updated_at: Date;
++}
++
++@Entity('passport_pairings')
++export class PassportPairing {
++  @PrimaryColumn({ type: 'char', length: 32 }) id: string;
++  @Index() @Column({ type: 'char', length: 32 }) device_id: string;
++  @Index({ unique: true }) @Column({ type: 'char', length: 64 }) claim_hash: string;
++  @Column({ type: 'datetime' }) expires_at: Date;
++  @Column({ type: 'int', nullable: true }) claimant_id: number | null;
++  @Column({ type: 'varchar', length: 16, default: 'pending' }) status: 'pending' | 'claimed' | 'confirmed';
++  @CreateDateColumn() created_at: Date;
++}
+--- a/src/modules/passport/passport.module.ts
++++ b/src/modules/passport/passport.module.ts
+@@ -0,0 +1,17 @@
++import { Module } from '@nestjs/common';
++import { TypeOrmModule } from '@nestjs/typeorm';
++import { AuthModule } from '../auth/auth.module';
++import { User } from '../users/entities/user.entity';
++import { PassportDevice, PassportPairing } from './passport.entity';
++import {
++  PassportDeviceController, PassportDeviceGuard,
++  PassportPublicController, PassportUserController,
++} from './passport.controller';
++import { PassportService } from './passport.service';
++
++@Module({
++  imports: [TypeOrmModule.forFeature([PassportDevice, PassportPairing, User]), AuthModule],
++  controllers: [PassportPublicController, PassportDeviceController, PassportUserController],
++  providers: [PassportService, PassportDeviceGuard],
++})
++export class PassportModule {}
+--- a/src/modules/passport/passport.controller.ts
++++ b/src/modules/passport/passport.controller.ts
+@@ -0,0 +1,109 @@
++import {
++  Body, CanActivate, Controller, Delete, ExecutionContext, Get, Header, Injectable,
++  Param, Patch, Post, Put, Req, StreamableFile, UseGuards,
++} from '@nestjs/common';
++import { AuthGuard } from '@nestjs/passport';
++import { createReadStream } from 'fs';
++import { Request } from 'express';
++import { CurrentUser } from '../../common/decorators/current-user.decorator';
++import { SkipResponseWrap } from '../../common/decorators/skip-response-wrap.decorator';
++import { PassportDevice } from './passport.entity';
++import { PassportService } from './passport.service';
++
++type DeviceRequest = Request & { passportDevice: PassportDevice };
++
++@Injectable()
++export class PassportDeviceGuard implements CanActivate {
++  constructor(private readonly service: PassportService) {}
++  async canActivate(context: ExecutionContext) {
++    const request = context.switchToHttp().getRequest<DeviceRequest>();
++    request.passportDevice = await this.service.authenticate(request.headers.authorization);
++    return true;
++  }
++}
++
++@Controller('passport')
++export class PassportPublicController {
++  constructor(private readonly service: PassportService) {}
++
++  @Post('device/register')
++  register(@Body() body: { device_id?: string; device_secret?: string }) {
++    return this.service.register(body?.device_id || '', body?.device_secret || '');
++  }
++
++  @Get('cards/:slug')
++  card(@Param('slug') slug: string) { return this.service.card(slug); }
++}
++
++@Controller('passport/device')
++@UseGuards(PassportDeviceGuard)
++export class PassportDeviceController {
++  constructor(private readonly service: PassportService) {}
++
++  @Post('pairings')
++  beginPairing(@Req() req: DeviceRequest) { return this.service.beginPairing(req.passportDevice); }
++
++  @Get('pairings/:id')
++  pairingStatus(@Req() req: DeviceRequest, @Param('id') id: string) {
++    return this.service.pairingStatus(req.passportDevice, id);
++  }
++
++  @Post('pairings/:id/confirm')
++  confirm(@Req() req: DeviceRequest, @Param('id') id: string) {
++    return this.service.confirm(req.passportDevice, id);
++  }
++
++  @Get('desired-theme')
++  desired(@Req() req: DeviceRequest) { return this.service.desiredTheme(req.passportDevice); }
++
++  @Get('themes/:id/pack')
++  @SkipResponseWrap()
++  @Header('Content-Type', 'application/octet-stream')
++  @Header('Cache-Control', 'no-store')
++  async pack(@Req() req: DeviceRequest, @Param('id') id: string) {
++    const { path, size } = await this.service.themeFile(req.passportDevice, id);
++    return new StreamableFile(createReadStream(path), { length: size, type: 'application/octet-stream' });
++  }
++
++  @Post('applied')
++  applied(@Req() req: DeviceRequest, @Body() body: { id?: string; sha256?: string }) {
++    return this.service.applied(req.passportDevice, body?.id || '', body?.sha256 || '');
++  }
++}
++
++@Controller('passport')
++@UseGuards(AuthGuard('jwt'))
++export class PassportUserController {
++  constructor(private readonly service: PassportService) {}
++
++  @Post('pairings/:code/claim')
++  claim(@Param('code') code: string, @CurrentUser('id') userId: number) {
++    return this.service.claim(code, userId);
++  }
++
++  @Get('devices')
++  devices(@CurrentUser('id') userId: number) { return this.service.mine(userId); }
++
++  @Delete('devices/:id')
++  unbind(@CurrentUser('id') userId: number, @Param('id') id: string) {
++    return this.service.unbind(userId, id);
++  }
++
++  @Put('devices/:id/theme')
++  theme(@CurrentUser('id') userId: number, @Param('id') id: string, @Body() body: { theme_id?: string }) {
++    return this.service.setTheme(userId, id, body?.theme_id || '');
++  }
++
++  @Patch('devices/:id/card')
++  cardVisibility(@CurrentUser('id') userId: number, @Param('id') id: string, @Body() body: { public?: boolean }) {
++    return this.service.setCardPublic(userId, id, body?.public as boolean);
++  }
++
++  @Get('cards/:slug/mine')
++  ownCard(@Param('slug') slug: string, @CurrentUser('id') userId: number) {
++    return this.service.card(slug, userId);
++  }
++
++  @Get('themes')
++  themes() { return [{ id: 'classic', title: '经典主题', version: 1, builtin: true }, ...this.service.themes()]; }
++}
+--- a/src/modules/passport/passport.service.ts
++++ b/src/modules/passport/passport.service.ts
+@@ -0,0 +1,235 @@
++import {
++  BadRequestException, ConflictException, ForbiddenException, Injectable,
++  NotFoundException, UnauthorizedException,
++} from '@nestjs/common';
++import { ConfigService } from '@nestjs/config';
++import { InjectRepository } from '@nestjs/typeorm';
++import { createHash, randomBytes, timingSafeEqual } from 'crypto';
++import { existsSync, readFileSync, statSync } from 'fs';
++import { join, resolve } from 'path';
++import { DataSource, LessThan, Repository } from 'typeorm';
++import { User } from '../users/entities/user.entity';
++import { PassportDevice, PassportPairing } from './passport.entity';
++
++const HEX32 = /^[0-9a-f]{32}$/;
++const HEX64 = /^[0-9a-f]{64}$/;
++const THEME_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
++const SITE = 'https://ai-passport.randomdance.cn';
++const PAIR_LIFETIME_MS = 5 * 60_000;
++
++function sha(value: string): string { return createHash('sha256').update(value).digest('hex'); }
++function equalHex(a: string, b: string): boolean {
++  if (!HEX64.test(a) || !HEX64.test(b)) return false;
++  return timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
++}
++
++export type PassportTheme = {
++  id: string; title: string; version: number; sha256: string;
++  size: number; file: string; preview_url: string;
++};
++
++@Injectable()
++export class PassportService {
++  constructor(
++    @InjectRepository(PassportDevice) private readonly devices: Repository<PassportDevice>,
++    @InjectRepository(PassportPairing) private readonly pairings: Repository<PassportPairing>,
++    @InjectRepository(User) private readonly users: Repository<User>,
++    private readonly dataSource: DataSource,
++    private readonly config: ConfigService,
++  ) {}
++
++  private themeDir(): string { return resolve(this.config.get<string>('PASSPORT_THEME_DIR', '/var/lib/random-dance/passport-themes')); }
++  themes(): PassportTheme[] {
++    const file = join(this.themeDir(), 'catalog.json');
++    if (!existsSync(file)) return [];
++    let items: unknown;
++    try { items = JSON.parse(readFileSync(file, 'utf8')); }
++    catch { return []; }
++    if (!Array.isArray(items)) return [];
++    return items.filter((item): item is PassportTheme => {
++      if (!item || typeof item !== 'object') return false;
++      const v = item as Record<string, unknown>;
++      if (typeof v.id !== 'string' || !THEME_ID.test(v.id) || v.id === 'classic') return false;
++      if (typeof v.title !== 'string' || v.title.length > 80 || !Number.isSafeInteger(v.version) || (v.version as number) < 1) return false;
++      if (typeof v.sha256 !== 'string' || !HEX64.test(v.sha256)) return false;
++      if (typeof v.size !== 'number' || !Number.isSafeInteger(v.size) || v.size < 1 || v.size > 0xc0000) return false;
++      if (typeof v.file !== 'string' || !/^[a-z0-9_-]+\.bin$/.test(v.file)) return false;
++      if (typeof v.preview_url !== 'string' || !v.preview_url.startsWith(`${SITE}/`)) return false;
++      try { return statSync(join(this.themeDir(), v.file)).size === v.size; }
++      catch { return false; }
++    });
++  }
++
++  theme(id: string): PassportTheme | null {
++    return this.themes().find(t => t.id === id) || null;
++  }
++
++  async register(id: string, secret: string) {
++    if (!HEX32.test(id) || !HEX64.test(secret)) throw new BadRequestException('设备标识或凭证格式错误');
++    const credential_hash = sha(secret);
++    const existing = await this.devices.findOne({ where: { id } });
++    if (existing) {
++      if (!equalHex(existing.credential_hash, credential_hash)) throw new ConflictException('设备标识已使用');
++      return { device_id: id, card_url: `${SITE}/card/${existing.card_slug}`, bound: existing.owner_id !== null };
++    }
++    const device = this.devices.create({
++      id, credential_hash, owner_id: null, card_slug: randomBytes(16).toString('hex'),
++      card_public: false, desired_theme: 'classic', applied_theme: 'classic',
++    });
++    try { await this.devices.save(device); }
++    catch { throw new ConflictException('设备注册冲突，请重试'); }
++    return { device_id: id, card_url: `${SITE}/card/${device.card_slug}`, bound: false };
++  }
++
++  async authenticate(header?: string): Promise<PassportDevice> {
++    const match = /^Passport ([0-9a-f]{32})\.([0-9a-f]{64})$/.exec(header || '');
++    if (!match) throw new UnauthorizedException('设备认证失败');
++    const device = await this.devices.findOne({ where: { id: match[1] } });
++    if (!device || !equalHex(device.credential_hash, sha(match[2]))) {
++      throw new UnauthorizedException('设备认证失败');
++    }
++    return device;
++  }
++
++  private async formalUser(id: number): Promise<User> {
++    const user = await this.users.findOne({ where: { id } });
++    if (!user || !user.wp_user_id || user.wp_user_id !== user.id) {
++      throw new ForbiddenException('请先登录正式网站账号');
++    }
++    return user;
++  }
++
++  async beginPairing(device: PassportDevice) {
++    if (device.owner_id !== null) throw new ConflictException('请先从原账号解绑设备');
++    await this.pairings.delete({ expires_at: LessThan(new Date()) });
++    const id = randomBytes(16).toString('hex');
++    const code = randomBytes(16).toString('hex');
++    await this.pairings.save(this.pairings.create({
++      id, device_id: device.id, claim_hash: sha(code),
++      expires_at: new Date(Date.now() + PAIR_LIFETIME_MS), claimant_id: null, status: 'pending',
++    }));
++    return { pairing_id: id, pair_url: `${SITE}/pair/${code}`, expires_in: 300 };
++  }
++
++  async pairingStatus(device: PassportDevice, id: string) {
++    if (!HEX32.test(id)) throw new NotFoundException();
++    const pairing = await this.pairings.findOne({ where: { id, device_id: device.id } });
++    if (!pairing) throw new NotFoundException();
++    if (pairing.expires_at.getTime() <= Date.now()) return { status: 'expired' };
++    let nickname: string | null = null;
++    if (pairing.status === 'claimed' && pairing.claimant_id) {
++      const claimant = await this.users.findOne({ where: { id: pairing.claimant_id } });
++      nickname = claimant?.nickname || null;
++    }
++    return { status: pairing.status, nickname, account_id: pairing.status === 'claimed' ? pairing.claimant_id : null };
++  }
++
++  async claim(code: string, userId: number) {
++    if (!HEX32.test(code)) throw new NotFoundException();
++    await this.formalUser(userId);
++    return this.dataSource.transaction(async manager => {
++      const repo = manager.getRepository(PassportPairing);
++      const pairing = await repo.findOne({ where: { claim_hash: sha(code) }, lock: { mode: 'pessimistic_write' } });
++      if (!pairing) throw new NotFoundException();
++      if (pairing.expires_at.getTime() <= Date.now()) throw new ConflictException('二维码已过期');
++      if (pairing.status === 'claimed' && pairing.claimant_id === userId) return { status: 'awaiting_device_confirmation', account_id: userId };
++      if (pairing.status !== 'pending') throw new ConflictException('二维码已被认领');
++      const device = await manager.getRepository(PassportDevice).findOne({ where: { id: pairing.device_id }, lock: { mode: 'pessimistic_write' } });
++      if (!device || device.owner_id !== null) throw new ConflictException('设备已绑定');
++      pairing.claimant_id = userId; pairing.status = 'claimed'; await repo.save(pairing);
++      return { status: 'awaiting_device_confirmation', account_id: userId };
++    });
++  }
++
++  async confirm(device: PassportDevice, id: string) {
++    if (!HEX32.test(id)) throw new NotFoundException();
++    return this.dataSource.transaction(async manager => {
++      const repo = manager.getRepository(PassportPairing);
++      const pairing = await repo.findOne({ where: { id, device_id: device.id }, lock: { mode: 'pessimistic_write' } });
++      if (!pairing) throw new NotFoundException();
++      if (pairing.expires_at.getTime() <= Date.now()) throw new ConflictException('二维码已过期');
++      if (pairing.status !== 'claimed' || !pairing.claimant_id) throw new ConflictException('等待用户扫码登录');
++      const devices = manager.getRepository(PassportDevice);
++      const current = await devices.findOne({ where: { id: device.id }, lock: { mode: 'pessimistic_write' } });
++      if (!current || current.owner_id !== null) throw new ConflictException('设备已绑定');
++      await this.formalUser(pairing.claimant_id);
++      current.owner_id = pairing.claimant_id; current.card_public = false;
++      await devices.save(current);
++      pairing.status = 'confirmed'; await repo.save(pairing);
++      return { status: 'bound', card_url: `${SITE}/card/${current.card_slug}` };
++    });
++  }
++
++  async mine(userId: number) {
++    return (await this.devices.find({ where: { owner_id: userId }, order: { created_at: 'DESC' } }))
++      .map(d => ({ id: d.id, card_url: `${SITE}/card/${d.card_slug}`, card_public: d.card_public,
++        desired_theme: d.desired_theme, applied_theme: d.applied_theme }));
++  }
++
++  async ownerDevice(userId: number, id: string): Promise<PassportDevice> {
++    if (!HEX32.test(id)) throw new NotFoundException();
++    const device = await this.devices.findOne({ where: { id, owner_id: userId } });
++    if (!device) throw new NotFoundException();
++    return device;
++  }
++
++  async unbind(userId: number, id: string) {
++    const device = await this.ownerDevice(userId, id);
++    device.owner_id = null; device.card_public = false; device.desired_theme = 'classic';
++    await this.devices.save(device);
++    return { unbound: true };
++  }
++
++  async setCardPublic(userId: number, id: string, isPublic: boolean) {
++    if (typeof isPublic !== 'boolean') throw new BadRequestException('公开状态必须为布尔值');
++    const device = await this.ownerDevice(userId, id);
++    device.card_public = isPublic; await this.devices.save(device);
++    return { card_public: device.card_public, card_url: `${SITE}/card/${device.card_slug}` };
++  }
++
++  async setTheme(userId: number, id: string, themeId: string) {
++    if (themeId !== 'classic' && !this.theme(themeId)) throw new BadRequestException('主题不可用');
++    const device = await this.ownerDevice(userId, id);
++    device.desired_theme = themeId; await this.devices.save(device);
++    return { desired_theme: themeId, applied_theme: device.applied_theme };
++  }
++
++  async desiredTheme(device: PassportDevice) {
++    const current = await this.devices.findOne({ where: { id: device.id } });
++    if (!current?.owner_id) throw new ForbiddenException('设备尚未绑定');
++    if (current.desired_theme === 'classic') return { id: 'classic', builtin: true };
++    const theme = this.theme(current.desired_theme);
++    if (!theme) throw new NotFoundException('所选主题暂不可用');
++    return { id: theme.id, version: theme.version, sha256: theme.sha256,
++      size: theme.size, package_url: `https://apps.randomdance.cn/api/v1/passport/device/themes/${theme.id}/pack` };
++  }
++
++  async themeFile(device: PassportDevice, id: string): Promise<{ path: string; size: number }> {
++    const current = await this.devices.findOne({ where: { id: device.id } });
++    if (!current?.owner_id || current.desired_theme !== id) throw new ForbiddenException('主题未分配给此设备');
++    const theme = this.theme(id);
++    if (!theme) throw new NotFoundException();
++    return { path: join(this.themeDir(), theme.file), size: theme.size };
++  }
++
++  async applied(device: PassportDevice, id: string, digest: string) {
++    const current = await this.devices.findOne({ where: { id: device.id } });
++    if (!current?.owner_id || current.desired_theme !== id) throw new ConflictException('主题分配已变化');
++    const expected = id === 'classic' ? null : this.theme(id)?.sha256;
++    if ((id !== 'classic' && !expected) || (expected && digest !== expected)) throw new ConflictException('主题校验不一致');
++    current.applied_theme = id; await this.devices.save(current);
++    return { applied_theme: id };
++  }
++
++  async card(slug: string, userId?: number) {
++    if (!HEX32.test(slug)) throw new NotFoundException();
++    const device = await this.devices.findOne({ where: { card_slug: slug } });
++    if (!device?.owner_id) throw new NotFoundException();
++    if (!device.card_public && device.owner_id !== userId) return { visibility: 'private' };
++    const user = await this.users.findOne({ where: { id: device.owner_id } });
++    if (!user) throw new NotFoundException();
++    return { visibility: device.card_public ? 'public' : 'owner',
++      nickname: user.nickname || '随机舞蹈用户', avatar_url: user.avatar_url || null,
++      theme: device.applied_theme };
++  }
++}
+--- a/scripts/migrations/passport-devices.sql
++++ b/scripts/migrations/passport-devices.sql
+@@ -0,0 +1,28 @@
++-- Apply only after reviewing the target database and recording a rollback point.
++-- No existing user, payment, marketing, or device_info rows are changed.
++CREATE TABLE IF NOT EXISTS passport_devices (
++  id CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
++  credential_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
++  owner_id INT NULL,
++  card_slug CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
++  card_public TINYINT(1) NOT NULL DEFAULT 0,
++  desired_theme VARCHAR(64) NOT NULL DEFAULT 'classic',
++  applied_theme VARCHAR(64) NOT NULL DEFAULT 'classic',
++  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
++  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
++  UNIQUE KEY uq_passport_card_slug (card_slug),
++  KEY ix_passport_owner (owner_id)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
++
++CREATE TABLE IF NOT EXISTS passport_pairings (
++  id CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
++  device_id CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
++  claim_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
++  expires_at DATETIME(6) NOT NULL,
++  claimant_id INT NULL,
++  status VARCHAR(16) NOT NULL DEFAULT 'pending',
++  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
++  UNIQUE KEY uq_passport_claim_hash (claim_hash),
++  KEY ix_passport_pair_device (device_id),
++  KEY ix_passport_pair_expiry (expires_at)
++) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

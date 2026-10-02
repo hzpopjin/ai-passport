@@ -214,3 +214,8 @@ LICENSE                  仓库许可证
 [参与贡献](../.github/CONTRIBUTING.zh_CN.md) · [获取帮助](../.github/SUPPORT.zh_CN.md) · [行为准则](../.github/CODE_OF_CONDUCT.zh_CN.md) · [安全说明](../.github/SECURITY.zh_CN.md) · [MIT 许可证](../LICENSE)
 
 AI 助手请从 [`AGENTS.md`](../AGENTS.md) 开始，再按任务路由读取相关文档。
+
+## H2H Pocket 应用
+
+[IAN 小伙伴：操作、歌曲打包、预览与验收](assets/h2h-pocket.zh_CN.md)。
+- [Agent 接手文档](assets/h2h-agent-handoff.zh_CN.md)

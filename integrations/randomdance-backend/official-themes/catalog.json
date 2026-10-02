@@ -1,0 +1,29 @@
+[
+  {
+    "id": "sky",
+    "title": "晴空水手服",
+    "version": 1,
+    "sha256": "6eca9a27d3ff857a86f686f4ecaa3419ce26654c3f0e3b7aaafcca766ef8b2e5",
+    "size": 16,
+    "file": "sky.bin",
+    "preview_url": "https://ai-passport.randomdance.cn/assets/images/h2h/ian_0_0.png"
+  },
+  {
+    "id": "lemon",
+    "title": "柠檬针织衫",
+    "version": 1,
+    "sha256": "22bbb889dac02e5f76fdbc333152722c89a38585b591c412e27e2e7f4784421c",
+    "size": 16,
+    "file": "lemon.bin",
+    "preview_url": "https://ai-passport.randomdance.cn/assets/images/h2h/ian_1_0.png"
+  },
+  {
+    "id": "pink",
+    "title": "粉色舞台装",
+    "version": 1,
+    "sha256": "34fbbdfe9627f2bb72f2812294525527d20ae5a0899fed3a39fd882c809ef081",
+    "size": 16,
+    "file": "pink.bin",
+    "preview_url": "https://ai-passport.randomdance.cn/assets/images/h2h/ian_2_0.png"
+  }
+]

@@ -1,0 +1,40 @@
+diff --git a/app.json b/app.json
+--- a/app.json
++++ b/app.json
+@@ -4,6 +4,7 @@
+     "pages/activities/activities",
+     "pages/wp-user/wp-user",
+     "pages/settings/settings",
++    "pages/ai-passport/ai-passport",
+     "pages/marketing/marketing",
+     "pages/marketing-referrals/marketing-referrals",
+     "pages/marketing-poster/marketing-poster",
+diff --git a/pages/settings/settings.js b/pages/settings/settings.js
+--- a/pages/settings/settings.js
++++ b/pages/settings/settings.js
+@@ -11,6 +11,10 @@
+ 
+   onShow() {
+     this.setData({ isDeveloper: developer.isDeveloper() })
++  },
++
++  openAiPassport() {
++    wx.navigateTo({ url: "/pages/ai-passport/ai-passport" })
+   },
+ 
+   copySite() {
+diff --git a/pages/settings/settings.wxml b/pages/settings/settings.wxml
+--- a/pages/settings/settings.wxml
++++ b/pages/settings/settings.wxml
+@@ -41,6 +41,11 @@
+         <view class="developer-entry-action">测试 ›</view>
+       </view>
+     </view>
++  </view>
++
++  <view class="section">
++    <view class="section-title">AI 通行证</view>
++    <view class="card menu"><view class="menu-item last" bindtap="openAiPassport"><view><view class="item-title">我的 AI 通行证</view><view class="muted small">扫码绑定、官方主题与 NFC 信息卡</view></view><view class="tag">打开</view></view></view>
+   </view>
+ 
+   <view class="section">

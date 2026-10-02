@@ -1,16 +1,8 @@
 idf_component_register(
-    SRCS "main.c"
-         "demo_navigation.c"
-         "ui_pixel.c"
-         "ui_pixel_math.c"
-         "demo_display.c"
-         "demo_button.c"
-         "demo_audio.c"
-         "demo_battery.c"
-         "demo_radio.c"
-         "demo_wifi.c"
-         "demo_ble.c"
-         "demo_low_power.c"
-    INCLUDE_DIRS "."
-    REQUIRES bsp bt esp_event esp_hw_support esp_netif esp_timer esp_wifi nvs_flash
+    SRCS "main.c" "h2h/h2h_model.c" "h2h/h2h_motion.c" "h2h/h2h_audio.c" "h2h/h2h_ui.c" "h2h/h2h_theme.c" "h2h/h2h_ble.c" "h2h/h2h_cloud.c"
+         "../assets/music/h2h/tracks.c" "../assets/images/h2h/sprites.c" "../assets/images/h2h/icons.c"
+         "../assets/fonts/h2h/h2h_font_16.c"
+    INCLUDE_DIRS "." "h2h"
+    REQUIRES bsp esp_timer nvs_flash esp_audio_codec esp_system bt esp_wifi esp_netif esp_event esp_http_client esp-tls mbedtls json
 )
+include("${CMAKE_CURRENT_LIST_DIR}/../assets/music/h2h/music.cmake")

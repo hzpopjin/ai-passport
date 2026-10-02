@@ -11,6 +11,8 @@ usage() {
 run_static_checks() {
     local actionlint_bin
     local test_dir
+    local gc_flag="-Wl,--gc-sections"
+    if [[ "$(uname -s)" == "Darwin" ]]; then gc_flag="-Wl,-dead_strip"; fi
 
     python3 tools/check_repo.py
 
@@ -57,7 +59,7 @@ run_static_checks() {
     for demo in audio low_power ble wifi; do
         "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
             -ffunction-sections -fdata-sections -Itests/demo_stubs -Imain \
-            "tests/test_demo_${demo}_runtime.c" -Wl,--gc-sections \
+            "tests/test_demo_${demo}_runtime.c" "${gc_flag}" \
             -o "${test_dir}/test_demo_${demo}_runtime"
         "${test_dir}/test_demo_${demo}_runtime"
     done
@@ -66,6 +68,20 @@ run_static_checks() {
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_verify_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_archive_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_install_passport_skills.py
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain/h2h \
+        tests/test_h2h_model.c main/h2h/h2h_model.c main/h2h/h2h_motion.c -o "${test_dir}/test_h2h_model"
+    "${test_dir}/test_h2h_model"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain/h2h \
+        tests/test_h2h_theme.c main/h2h/h2h_theme.c main/h2h/h2h_model.c -o "${test_dir}/test_h2h_theme"
+    "${test_dir}/test_h2h_theme"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
+        -Itests/h2h_audio_stubs -Itests/audio_stubs -Icomponents/bsp/include -Imain/h2h \
+        tests/test_h2h_audio.c -o "${test_dir}/test_h2h_audio"
+    "${test_dir}/test_h2h_audio"
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_h2h_assets.py
+    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_h2h_*web.py'
+    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_h2h_nfc_ndef.py'
+    PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_h2h_theme_catalog.py'
     rm -rf "${test_dir}"
     echo "Host tests: PASS"
 }
@@ -87,6 +103,7 @@ run_firmware_checks() (
     idf.py -B "${validation_build_dir}" merge-bin \
         -o "${validation_build_dir}/FoloToy-AI-Passport-full.bin"
     python3 tools/verify_firmware.py "${validation_build_dir}"
+    python3 tools/h2h/check_capacity.py "${validation_build_dir}"
     PYTHONDONTWRITEBYTECODE=1 python3 tools/archive_firmware.py create \
         "${validation_build_dir}" --archive-root "${repo_root}/build/firmware"
     mkdir -p "${repo_root}/build"
