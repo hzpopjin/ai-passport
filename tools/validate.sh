@@ -78,6 +78,9 @@ run_static_checks() {
         -Itests/h2h_audio_stubs -Itests/audio_stubs -Icomponents/bsp/include -Imain/h2h \
         tests/test_h2h_audio.c -o "${test_dir}/test_h2h_audio"
     "${test_dir}/test_h2h_audio"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain/h2h \
+        tests/test_h2h_ownership.c main/h2h/h2h_ownership.c -o "${test_dir}/test_h2h_ownership"
+    "${test_dir}/test_h2h_ownership"
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_h2h_assets.py
     PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_h2h_*web.py'
     PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_h2h_nfc_ndef.py'
