@@ -81,6 +81,12 @@ run_static_checks() {
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain/h2h \
         tests/test_h2h_ownership.c main/h2h/h2h_ownership.c -o "${test_dir}/test_h2h_ownership"
     "${test_dir}/test_h2h_ownership"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain/h2h \
+        tests/test_h2h_pocket.c main/h2h/h2h_pocket.c main/h2h/h2h_ownership.c main/h2h/h2h_model.c -o "${test_dir}/test_h2h_pocket"
+    "${test_dir}/test_h2h_pocket"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain/h2h \
+        tests/test_h2h_activation.c main/h2h/h2h_model.c -o "${test_dir}/test_h2h_activation"
+    "${test_dir}/test_h2h_activation"
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_h2h_assets.py
     PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_h2h_*web.py'
     PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_h2h_nfc_ndef.py'

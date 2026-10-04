@@ -4,6 +4,17 @@
 #define SAVE_MAGIC 0x48324850u
 #define SAVE_VERSION 1u
 #define TAP_GAP_MS 800u
+static bool locked(const h2h_model_t *m) { return m->activation_required && !m->play_allowed; }
+void h2h_activation(h2h_model_t *m, bool allowed) {
+    bool was_locked=locked(m);
+    m->activation_required=true; m->play_allowed=allowed;
+    if(!allowed) {
+        if(!was_locked || m->want_play || m->countdown_ms) ++m->generation;
+        m->want_play=false; m->countdown_ms=0; m->tap_count=0; m->tap_gap_ms=0;
+        m->game_paused=true; m->game_settled=true;
+        if(m->page!=H2H_ACCOUNT) { m->page=H2H_ACCOUNT; m->selection=0; }
+    } else if(was_locked) { m->page=H2H_HOME; m->selection=0; }
+}
 static uint32_t random_next(h2h_model_t *m) {
     uint32_t x = m->rng;
     x ^= x << 13; x ^= x >> 17; x ^= x << 5;
@@ -71,6 +82,7 @@ static void reward(h2h_model_t *m, unsigned hearts) {
     m->dirty = true;
 }
 void h2h_listened(h2h_model_t *m, uint32_t ms) {
+    if(locked(m)) return;
     /* Only confirmed PCM written by the audio worker reaches this function. */
     uint64_t total = (uint64_t)m->save.listen_ms + ms;
     reward(m, (unsigned)(total / 120000));
@@ -84,7 +96,7 @@ unsigned h2h_menu_count(const h2h_model_t *m) {
         case H2H_TRACKS: return m->song_count;
         case H2H_COLLECTION: return 10;
         case H2H_SETTINGS: return 4;
-        case H2H_ACCOUNT: return 3;
+        case H2H_ACCOUNT: return m->activation_required ? 5 : 3;
         default: return 0;
     }
 }
@@ -94,6 +106,7 @@ static void page(h2h_model_t *m, h2h_page_t p) {
     m->page = p; m->selection = 0;
 }
 void h2h_start_track(h2h_model_t *m, unsigned song) {
+    if(locked(m)) return;
     if (!m->song_count || song >= m->song_count) return;
     clear_taps(m);
     m->track = song + (h2h_chorus_mode(m) ? m->song_count : 0);
@@ -103,6 +116,7 @@ void h2h_start_track(h2h_model_t *m, unsigned song) {
     m->want_play = !m->countdown_ms;
 }
 void h2h_seek_relative(h2h_model_t *m, int delta_ms) {
+    if(locked(m)) return;
     if(!m->generation || !m->duration_ms || m->audio_error) return;
     int64_t target=(int64_t)m->position_ms+delta_ms;
     uint32_t last=m->duration_ms>20?m->duration_ms-20:0;
@@ -135,6 +149,7 @@ static void player_tap(h2h_model_t *m, h2h_key_t key) {
     m->want_play = was_playing;
 }
 void h2h_audio_end(h2h_model_t *m, unsigned generation, bool failed) {
+    if(locked(m)) return;
     if (generation != m->generation) return;
     finish_taps(m);
     if (failed) { m->audio_error = true; m->want_play = false; m->countdown_ms = 0; return; }
@@ -169,6 +184,7 @@ static void back(h2h_model_t *m) {
     page(m, H2H_HOME);
 }
 void h2h_input(h2h_model_t *m, h2h_key_t key, h2h_event_t event) {
+    if(locked(m)) { h2h_activation(m,false); if(event==H2H_LONG) return; }
     if(m->page==H2H_PLAYER && key!=H2H_OK) {
         if(event==H2H_PRESS) { m->suppress_volume[key]=false; return; }
         if(event==H2H_LONG) { m->suppress_volume[key]=true; finish_taps(m); h2h_seek_relative(m,key==H2H_UP?10000:-10000); return; }
@@ -251,6 +267,7 @@ void h2h_input(h2h_model_t *m, h2h_key_t key, h2h_event_t event) {
 }
 void h2h_tick(h2h_model_t *m, uint32_t ms) {
     m->animation_ms+=ms;
+    if(locked(m)) { h2h_activation(m,false); return; }
     if (m->tap_gap_ms) {
         if (ms >= m->tap_gap_ms) finish_taps(m);
         else m->tap_gap_ms -= ms;

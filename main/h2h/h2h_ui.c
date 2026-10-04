@@ -173,10 +173,10 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
         center_text(text(screen,20,45,200,line,INK));
         if (cloud && cloud->pair_url[0]) {
             lv_obj_t *qr=lv_qrcode_create(screen);
-            lv_qrcode_set_size(qr,158);
+            lv_qrcode_set_size(qr,144);
             lv_qrcode_set_dark_color(qr,lv_color_hex(INK));
             lv_qrcode_set_light_color(qr,lv_color_hex(0xFFFFFF));
-            lv_obj_set_pos(qr,41,69);
+            lv_obj_set_pos(qr,48,62);
             if (lv_qrcode_update(qr,cloud->pair_url,strlen(cloud->pair_url))!=LV_RESULT_OK)
                 center_text(text(screen,20,188,200,"QR unavailable",INK));
         } else {
@@ -189,14 +189,14 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
         }
         if (passkey>=0) {
             snprintf(line,sizeof(line),"BLE PIN %06d",passkey);
-            center_text(text(screen,18,219,204,line,INK));
-        } else if (ble_connected) center_text(text(screen,18,219,204,"BLE CONNECTED",INK));
-        const char *actions[]={"Confirm","Refresh","Forget"};
-        for(int i=0;i<3;i++) {
-            rows[i]=box(screen,9+i*75,244,71,31,m->selection==(unsigned)i?LEMON:SKY,8);
+            center_text(text(screen,18,207,204,line,INK));
+        } else if (ble_connected) center_text(text(screen,18,207,204,"BLE CONNECTED",INK));
+        const char *actions[]={"Confirm","Sync","Forget","Unbind","Restore"};
+        for(int i=0;i<5;i++) {
+            rows[i]=box(screen,9+(i%3)*75,225+(i/3)*30,71,28,m->selection==(unsigned)i?LEMON:SKY,8);
             center_text(text(rows[i],2,7,67,actions[i],INK));
         }
-        lv_label_set_text(hint,"Hold OK to return");
+        lv_label_set_text(hint,m->activation_required && !m->play_allowed?"Activation required":"Hold OK to return");
         break;
     }
     }

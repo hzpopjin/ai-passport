@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.c" "h2h/h2h_model.c" "h2h/h2h_motion.c" "h2h/h2h_audio.c" "h2h/h2h_ui.c" "h2h/h2h_theme.c" "h2h/h2h_ble.c" "h2h/h2h_cloud.c"
+    SRCS "main.c" "h2h/h2h_model.c" "h2h/h2h_motion.c" "h2h/h2h_audio.c" "h2h/h2h_ui.c" "h2h/h2h_theme.c" "h2h/h2h_ble.c" "h2h/h2h_cloud.c" "h2h/h2h_ownership.c" "h2h/h2h_pocket.c"
          "../assets/music/h2h/tracks.c" "../assets/images/h2h/sprites.c" "../assets/images/h2h/icons.c"
          "../assets/fonts/h2h/h2h_font_16.c"
     INCLUDE_DIRS "." "h2h"

@@ -14,6 +14,10 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "mbedtls/sha256.h"
+#include "mbedtls/base64.h"
+#include "h2h_tracks.h"
+#include <math.h>
+#include <inttypes.h>
 #include "nvs.h"
 #include <stdio.h>
 #include <string.h>
@@ -21,14 +25,15 @@
 
 #define API "https://apps.randomdance.cn/api/v1/passport"
 #define IP_READY BIT0
-#define THEME_DONE BIT1
-#define THEME_SAVED BIT2
 #define REPLY_MAX 2048
 static const char *TAG = "h2h_cloud";
 typedef enum { CMD_OPEN, CMD_CLOSE, CMD_WIFI, CMD_CONFIRM, CMD_REFRESH, CMD_FORGET } command_type_t;
-typedef struct { command_type_t type; char ssid[33], password[65]; } command_t;
+typedef struct { command_type_t type; char ssid[33], password[65], code[33]; uint64_t epoch; uint32_t account; } command_t;
 typedef struct { unsigned char body[REPLY_MAX]; size_t length; bool overflow; } reply_t;
-static QueueHandle_t queue, themes;
+static QueueHandle_t queue;
+static h2h_pocket_t pocket;
+static uint64_t pair_epoch;
+static uint32_t pair_account, pair_started;
 static SemaphoreHandle_t state_lock;
 static EventGroupHandle_t events;
 static h2h_cloud_status_t state;
@@ -48,6 +53,13 @@ void h2h_cloud_status(h2h_cloud_status_t *out) {
     if (!out || !state_lock) return;
     if (xSemaphoreTake(state_lock, pdMS_TO_TICKS(100)) == pdTRUE) {
         *out = state;
+        out->bound=h2h_pocket_can_play(&pocket);
+        out->conflict=pocket.record.conflict;
+        out->pending_unbind=pocket.record.ownership.pending_unbind[0]!=0;
+        out->recovery=pocket.record.recovery;
+        out->ownership_epoch=pocket.record.ownership.epoch;
+        out->model_generation=pocket.model_generation;
+        out->save_revision=pocket.record.revision;
         out->wifi_ready = events && (xEventGroupGetBits(events) & IP_READY) != 0;
         xSemaphoreGive(state_lock);
     }
@@ -157,7 +169,7 @@ static esp_err_t http_event(esp_http_client_event_t *event) {
 }
 static bool request(const char *path, esp_http_client_method_t method, const char *payload,
                     bool auth, reply_t *reply) {
-    char url[192], authorization[110];
+    char url[192];
     snprintf(url, sizeof(url), API "%s", path);
     esp_http_client_config_t config = {
         .url = url, .method = method, .timeout_ms = 8000,
@@ -167,9 +179,8 @@ static bool request(const char *path, esp_http_client_method_t method, const cha
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) return false;
     if (auth) {
-        snprintf(authorization, sizeof(authorization), "Passport %s.%s", state.device_id, secret);
-        (void)esp_http_client_set_header(client, "Authorization", authorization);
-        memset(authorization, 0, sizeof(authorization));
+        (void)esp_http_client_set_header(client, "X-Passport-Device", state.device_id);
+        (void)esp_http_client_set_header(client, "X-Passport-Token", secret);
     }
     if (payload) {
         (void)esp_http_client_set_header(client, "Content-Type", "application/json");
@@ -208,221 +219,265 @@ static bool api_json(const char *path, esp_http_client_method_t method, const ch
     *out = response_data(&reply);
     return *out != NULL;
 }
-static bool register_device(void) {
-    char payload[160];
-    snprintf(payload, sizeof(payload), "{\"device_id\":\"%s\",\"device_secret\":\"%s\"}", state.device_id, secret);
-    cJSON *data = NULL;
-    if (!api_json("/device/register", HTTP_METHOD_POST, payload, false, &data)) return false;
-    char card_url[96];
-    const cJSON *bound = cJSON_GetObjectItemCaseSensitive(data, "bound");
-    bool ok = field(data, "card_url", card_url, sizeof(card_url)) &&
-              strncmp(card_url, "https://ai-passport.randomdance.cn/card/", 40) == 0 &&
-              (cJSON_IsTrue(bound) || cJSON_IsFalse(bound));
-    if (ok && xSemaphoreTake(state_lock, portMAX_DELAY) == pdTRUE) {
-        strcpy(state.card_url, card_url);
-        state.bound = cJSON_IsTrue(bound);
-        if (state.bound) { state.state = H2H_CLOUD_BOUND; strcpy(state.message, "Account connected"); }
-        else { state.state = H2H_CLOUD_READY; strcpy(state.message, "Scan to sign in"); }
+static bool write_record(const unsigned char *bytes, size_t length, void *context) {
+    (void)context;
+    nvs_handle_t handle;
+    if(nvs_open("h2h_cloud",NVS_READWRITE,&handle)!=ESP_OK) return false;
+    esp_err_t error=nvs_set_blob(handle,"pocket_v2",bytes,length);
+    if(error==ESP_OK) error=nvs_commit(handle);
+    nvs_close(handle); return error==ESP_OK;
+}
+static bool number(const cJSON *object, const char *key, uint64_t *out) {
+    const cJSON *value=cJSON_GetObjectItemCaseSensitive(object,key);
+    if(!cJSON_IsNumber(value)||!isfinite(value->valuedouble)||value->valuedouble<0||
+       value->valuedouble>(double)H2H_POCKET_MAX_INTEGER||floor(value->valuedouble)!=value->valuedouble) return false;
+    *out=(uint64_t)value->valuedouble; return true;
+}
+static void digest(const h2h_save_t *save, char out[65]) {
+    unsigned char bytes[32]; mbedtls_sha256((const unsigned char *)save,sizeof(*save),bytes,0);
+    for(unsigned i=0;i<32;i++) snprintf(out+2*i,3,"%02x",bytes[i]);
+}
+static bool parse_save(const cJSON *data, h2h_pocket_reply_t *out) {
+    const cJSON *save=cJSON_GetObjectItemCaseSensitive(data,"save");
+    if(!save || cJSON_IsNull(save)) return true;
+    char base64[80], sha[65], computed[65]; uint64_t schema;
+    if(!cJSON_IsObject(save)||!field(save,"data",base64,sizeof(base64))||!field(save,"sha256",sha,sizeof(sha))||
+       !number(save,"revision",&out->revision)||!number(save,"schema",&schema)||schema!=1) return false;
+    size_t length=0;
+    if(mbedtls_base64_decode((unsigned char *)&out->save,sizeof(out->save),&length,
+                            (const unsigned char *)base64,strlen(base64))!=0 || length!=sizeof(out->save)) return false;
+    digest(&out->save,computed);
+    if(strcmp(sha,computed)!=0) return false;
+    out->has_save=true; return true;
+}
+static bool sync_device(void) {
+    h2h_pocket_record_t sent;
+    if(xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return false;
+    if(!pocket.healthy) { xSemaphoreGive(state_lock); return false; }
+    sent=pocket.record; xSemaphoreGive(state_lock);
+    char payload[768], save_part[320]="", unbind_part[150]="";
+    if(sent.ownership.pending_unbind[0]) {
+        snprintf(unbind_part,sizeof(unbind_part),",\"pending_unbind\":{\"operation_id\":\"%s\",\"expected_epoch\":%" PRIu64 "}",
+                 sent.ownership.pending_unbind,sent.ownership.pending_epoch);
+    } else if(sent.restore_ack) {
+        char sha[65]; digest(&sent.remote_save,sha);
+        snprintf(save_part,sizeof(save_part),",\"save_ack\":{\"revision\":%" PRIu64 ",\"sha256\":\"%s\"}",sent.remote_revision,sha);
+    } else if(sent.dirty && !sent.conflict && h2h_ownership_can_play(&sent.ownership)) {
+        char sha[65]; unsigned char base64[80]; size_t length=0; digest(&sent.save,sha);
+        if(mbedtls_base64_encode(base64,sizeof(base64)-1,&length,(const unsigned char *)&sent.save,sizeof(sent.save))!=0) return false;
+        base64[length]=0;
+        snprintf(save_part,sizeof(save_part),",\"save\":{\"base_revision\":%" PRIu64 ",\"schema\":1,\"sha256\":\"%s\",\"data\":\"%s\"}",
+                 sent.revision,sha,base64);
+    }
+    snprintf(payload,sizeof(payload),"{\"ownership_epoch\":%" PRIu64 "%s%s}",sent.ownership.epoch,unbind_part,save_part);
+    cJSON *data=NULL;
+    if(!api_json("/device/sync",HTTP_METHOD_POST,payload,true,&data)) { update(H2H_CLOUD_OFFLINE,"Sync unavailable; offline"); return false; }
+    h2h_pocket_reply_t reply={0}; uint64_t account=0;
+    const cJSON *owner=cJSON_GetObjectItemCaseSensitive(data,"account_id");
+    const cJSON *active=cJSON_GetObjectItemCaseSensitive(data,"activated");
+    const cJSON *locked=cJSON_GetObjectItemCaseSensitive(data,"locked");
+    const cJSON *restore=cJSON_GetObjectItemCaseSensitive(data,"restore_required");
+    char status[40]="",ack[33]="",rejected[33]="",card[96]="";
+    bool ok=number(data,"ownership_epoch",&reply.epoch) && (cJSON_IsTrue(active)||cJSON_IsFalse(active)) &&
+            (cJSON_IsTrue(locked)||cJSON_IsFalse(locked)) && field(data,"save_status",status,sizeof(status));
+    if(owner && !cJSON_IsNull(owner)) ok=ok && number(data,"account_id",&account) && account>0 && account<=UINT32_MAX;
+    reply.activated=cJSON_IsTrue(active); reply.account_id=(uint32_t)account;
+    reply.conflict=strcmp(status,"revision_conflict")==0;
+    reply.restore_required=cJSON_IsTrue(restore);
+    reply.unbind_ack=field(data,"pending_unbind_ack",ack,sizeof(ack))?ack:NULL;
+    reply.unbind_rejected=field(data,"pending_unbind_rejected",rejected,sizeof(rejected))?rejected:NULL;
+    ok=ok && parse_save(data,&reply);
+    if(ok && xSemaphoreTake(state_lock,portMAX_DELAY)==pdTRUE) {
+        ok=h2h_pocket_reply(&pocket,&sent,&reply,write_record,NULL);
+        if(ok) {
+            state.bound=h2h_pocket_can_play(&pocket);
+            if(field(data,"card_url",card,sizeof(card)) && strncmp(card,"https://ai-passport.randomdance.cn/card/",40)==0) strcpy(state.card_url,card);
+            if(pocket.record.ownership.pending_unbind[0]) strcpy(state.message,"Unbind awaiting sync");
+            else if(pocket.record.conflict) strcpy(state.message,"Save conflict; choose restore");
+            else if(state.bound) { state.state=H2H_CLOUD_BOUND; strcpy(state.message,"Account connected; backed up"); }
+            else if(pairing_id[0]) {
+                state.state=pair_account?H2H_CLOUD_CLAIMED:H2H_CLOUD_PAIRING;
+                if(pair_account) snprintf(state.message,sizeof(state.message),"Confirm #%" PRIu32,pair_account);
+                else strcpy(state.message,"Scan; then confirm on card");
+            } else { state.state=H2H_CLOUD_READY; strcpy(state.message,"Activation required"); }
+            if(pocket.record.ownership.activated && !pocket.record.ownership.pending_unbind[0]) {
+                pairing_id[0]=0; pair_account=0; state.pair_url[0]=0;
+            }
+        } else { state.state=H2H_CLOUD_ERROR; strcpy(state.message,"State rejected or save failed"); }
         xSemaphoreGive(state_lock);
     }
-    if (ok) {
-        nvs_handle_t handle;
-        if (nvs_open("h2h_cloud", NVS_READWRITE, &handle) == ESP_OK) {
-            (void)nvs_set_u8(handle, "bound", cJSON_IsTrue(bound) ? 1 : 0);
-            (void)nvs_commit(handle); nvs_close(handle);
-        }
-    }
-    cJSON_Delete(data);
-    return ok;
+    cJSON_Delete(data); return ok;
 }
 static bool begin_pairing(void) {
-    cJSON *data = NULL;
-    if (!api_json("/device/pairings", HTTP_METHOD_POST, "{}", true, &data)) return false;
-    char url[96], id[33];
-    bool ok = field(data, "pair_url", url, sizeof(url)) && field(data, "pairing_id", id, sizeof(id)) &&
-              strncmp(url, "https://ai-passport.randomdance.cn/pair/", 40) == 0;
-    if (ok && xSemaphoreTake(state_lock, portMAX_DELAY) == pdTRUE) {
-        strcpy(pairing_id, id);
-        strcpy(state.pair_url, url);
-        state.state = H2H_CLOUD_PAIRING;
-        strcpy(state.message, "Scan to sign in");
+    if(xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return false;
+    bool allowed=pocket.healthy && !pocket.record.ownership.activated && !pocket.record.ownership.pending_unbind[0];
+    pair_epoch=pocket.record.ownership.epoch; xSemaphoreGive(state_lock);
+    if(!allowed) return false;
+    cJSON *data=NULL; char code[33]="",url[96]=""; uint64_t epoch;
+    if(!api_json("/device/pairings/begin",HTTP_METHOD_POST,"{}",true,&data)) return false;
+    bool ok=field(data,"code",code,sizeof(code)) && field(data,"pair_url",url,sizeof(url)) &&
+            number(data,"ownership_epoch",&epoch) && epoch==pair_epoch;
+    char expected[96]; snprintf(expected,sizeof(expected),"https://ai-passport.randomdance.cn/pair/%s",code);
+    ok=ok && strlen(code)==32 && strcmp(expected,url)==0;
+    if(ok && xSemaphoreTake(state_lock,portMAX_DELAY)==pdTRUE) {
+        strcpy(pairing_id,code); strcpy(state.pair_url,url); state.state=H2H_CLOUD_PAIRING;
+        strcpy(state.message,"Scan; then confirm on card"); pair_account=0; pair_started=(uint32_t)xTaskGetTickCount();
         xSemaphoreGive(state_lock);
     }
-    cJSON_Delete(data);
-    return ok;
+    cJSON_Delete(data); return ok;
 }
 static void poll_pairing(void) {
-    if (!pairing_id[0]) return;
-    char path[80]; snprintf(path, sizeof(path), "/device/pairings/%s", pairing_id);
-    cJSON *data = NULL;
-    if (!api_json(path, HTTP_METHOD_GET, NULL, true, &data)) return;
-    char status[32];
-    if (field(data, "status", status, sizeof(status))) {
-        if (strcmp(status, "claimed") == 0) {
-            const cJSON *account = cJSON_GetObjectItemCaseSensitive(data, "account_id");
-            if (cJSON_IsNumber(account) && account->valuedouble > 0 && account->valuedouble < 1000000000) {
-                char message[64];
-                snprintf(message, sizeof(message), "Confirm account #%d", account->valueint);
-                update(H2H_CLOUD_CLAIMED, message);
-            }
+    if(!pairing_id[0]) return;
+    cJSON *data=NULL; uint64_t account=0,epoch=0; char status[16]="";
+    if(!api_json("/device/pairings/current",HTTP_METHOD_GET,NULL,true,&data)) return;
+    bool ok=number(data,"ownership_epoch",&epoch) && epoch==pair_epoch && field(data,"status",status,sizeof(status));
+    if(ok && strcmp(status,"claimed")==0 && number(data,"account_id",&account) && account>0 && account<=UINT32_MAX) {
+        if(xSemaphoreTake(state_lock,portMAX_DELAY)==pdTRUE) {
+            pair_account=(uint32_t)account; state.state=H2H_CLOUD_CLAIMED;
+            snprintf(state.message,sizeof(state.message),"Confirm #%" PRIu32,pair_account);
+            xSemaphoreGive(state_lock);
         }
-        else if (strcmp(status, "expired") == 0) {
-            pairing_id[0] = 0;
-            if (xSemaphoreTake(state_lock, portMAX_DELAY) == pdTRUE) { state.pair_url[0] = 0; xSemaphoreGive(state_lock); }
-            update(H2H_CLOUD_READY, "QR expired");
+    } else if(!ok || strcmp(status,"expired")==0) {
+        if(xSemaphoreTake(state_lock,portMAX_DELAY)==pdTRUE) {
+            pairing_id[0]=0; pair_account=0; state.pair_url[0]=0; xSemaphoreGive(state_lock);
         }
+        update(H2H_CLOUD_READY,"QR expired; open again");
     }
     cJSON_Delete(data);
 }
-static void confirm_pairing(void) {
-    if (!pairing_id[0]) return;
-    char path[96]; snprintf(path, sizeof(path), "/device/pairings/%s/confirm", pairing_id);
-    cJSON *data = NULL;
-    if (!api_json(path, HTTP_METHOD_POST, "{}", true, &data)) { update(H2H_CLOUD_ERROR, "Confirm failed"); return; }
-    pairing_id[0] = 0;
-    if (xSemaphoreTake(state_lock, portMAX_DELAY) == pdTRUE) {
-        state.bound = true; state.pair_url[0] = 0;
-        state.state = H2H_CLOUD_BOUND; strcpy(state.message, "Account connected");
-        xSemaphoreGive(state_lock);
-    }
-    nvs_handle_t handle;
-    if (nvs_open("h2h_cloud", NVS_READWRITE, &handle) == ESP_OK) {
-        (void)nvs_set_u8(handle, "bound", 1); (void)nvs_commit(handle); nvs_close(handle);
-    }
+static void confirm_pairing(const command_t *command) {
+    if(!pairing_id[0] || !pair_account) return;
+    if(xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return;
+    bool allowed=pocket.healthy && pocket.record.ownership.epoch==command->epoch && pair_epoch==command->epoch &&
+                 pair_account==command->account && strcmp(pairing_id,command->code)==0 && !pocket.record.ownership.pending_unbind[0];
+    xSemaphoreGive(state_lock); if(!allowed) return;
+    char payload[160]; snprintf(payload,sizeof(payload),"{\"code\":\"%s\",\"account_id\":%" PRIu32 ",\"expected_epoch\":%" PRIu64 "}",command->code,command->account,command->epoch);
+    cJSON *data=NULL;
+    if(!api_json("/device/pairings/confirm",HTTP_METHOD_POST,payload,true,&data)) { update(H2H_CLOUD_ERROR,"Confirm failed; refresh"); return; }
     cJSON_Delete(data);
-}
-static void refresh_theme(void) {
-    update(H2H_CLOUD_WORKING, "Downloading theme");
-    cJSON *data = NULL;
-    if (!api_json("/device/desired-theme", HTTP_METHOD_GET, NULL, true, &data)) {
-        update(H2H_CLOUD_ERROR, "Theme request failed"); return;
-    }
-    char id[65], digest[65], path[128];
-    h2h_theme_t theme = {0};
-    bool ok = field(data, "id", id, sizeof(id));
-    if (ok) for (size_t i=0; id[i]; ++i) {
-        if (!((id[i]>='a' && id[i]<='z') || (id[i]>='0' && id[i]<='9') ||
-              id[i]=='_' || id[i]=='-')) { ok=false; break; }
-    }
-    if (ok && strcmp(id, "classic") != 0) {
-        const cJSON *size = cJSON_GetObjectItemCaseSensitive(data, "size");
-        ok = field(data, "sha256", digest, sizeof(digest)) && cJSON_IsNumber(size) &&
-             size->valueint == H2H_THEME_PACK_SIZE && strlen(id) <= 63;
-        if (ok) {
-            snprintf(path, sizeof(path), "/device/themes/%s/pack", id);
-            reply_t pack;
-            ok = request(path, HTTP_METHOD_GET, NULL, true, &pack) && pack.length == H2H_THEME_PACK_SIZE;
-            if (ok) {
-                unsigned char hash[32]; char computed[65];
-                mbedtls_sha256(pack.body, pack.length, hash, 0);
-                for (unsigned i=0;i<32;i++) snprintf(computed+i*2, 3, "%02x", hash[i]);
-                ok = strcmp(computed, digest) == 0 && h2h_theme_parse(pack.body, pack.length, &theme);
-            }
-        }
-    }
-    cJSON_Delete(data);
-    xEventGroupClearBits(events, THEME_DONE | THEME_SAVED);
-    if (!ok || xQueueSend(themes, &theme, 0) != pdTRUE) { update(H2H_CLOUD_ERROR, "Theme verify failed"); return; }
-    EventBits_t result = xEventGroupWaitBits(events, THEME_DONE, pdTRUE, pdFALSE, pdMS_TO_TICKS(8000));
-    if (!(result & THEME_DONE) || !(result & THEME_SAVED)) { update(H2H_CLOUD_ERROR, "Theme save failed"); return; }
-    snprintf(path, sizeof(path), "/device/applied");
-    char payload[180];
-    snprintf(payload, sizeof(payload), "{\"id\":\"%s\",\"sha256\":\"%s\"}", id,
-             strcmp(id, "classic") == 0 ? "" : digest);
-    cJSON *reported = NULL;
-    if (api_json(path, HTTP_METHOD_POST, payload, true, &reported)) {
-        cJSON_Delete(reported);
-        update(H2H_CLOUD_BOUND, "Theme applied");
-    } else update(H2H_CLOUD_ERROR, "Theme report failed");
+    // Only sync + an atomic NVS ownership/save reset can unlock play.
+    (void)sync_device();
 }
 static void worker(void *arg) {
     (void)arg;
-    if (!wifi_init()) { update(H2H_CLOUD_ERROR, "Wi-Fi init failed"); vTaskDelete(NULL); }
-    bool registered = false;
-    if (ssid_saved[0] && wifi_connect(ssid_saved, password_saved)) registered = register_device();
-    if (account_open && registered && !state.bound) begin_pairing();
-    uint32_t next_poll = 0;
-    for (;;) {
+    if(!wifi_init()) { update(H2H_CLOUD_ERROR,"Wi-Fi init failed"); vTaskDelete(NULL); return; }
+    if(ssid_saved[0]) (void)wifi_connect(ssid_saved,password_saved);
+    uint32_t next_poll=0,next_sync=0;
+    for(;;) {
         command_t command;
-        if (xQueueReceive(queue, &command, pdMS_TO_TICKS(500)) == pdTRUE) {
-            switch (command.type) {
+        if(xQueueReceive(queue,&command,pdMS_TO_TICKS(500))==pdTRUE) {
+            switch(command.type) {
             case CMD_OPEN:
-                account_open = true;
-                if (xEventGroupGetBits(events) & IP_READY) registered = register_device();
-                if (registered && !state.bound && !pairing_id[0]) begin_pairing();
+                account_open=true;
+                if(xEventGroupGetBits(events)&IP_READY) { (void)sync_device(); if(!pairing_id[0]) (void)begin_pairing(); }
                 break;
-            case CMD_CLOSE: account_open = false; break;
+            case CMD_CLOSE: account_open=false; break;
             case CMD_WIFI:
-                if (wifi_connect(command.ssid, command.password)) {
-                    if (!store_wifi(command.ssid, command.password)) update(H2H_CLOUD_ERROR, "Wi-Fi save failed");
-                    registered = register_device();
-                    if (registered && account_open && !state.bound) begin_pairing();
+                if(wifi_connect(command.ssid,command.password)) {
+                    if(!store_wifi(command.ssid,command.password)) update(H2H_CLOUD_ERROR,"Wi-Fi save failed");
+                    (void)sync_device(); if(account_open && !pairing_id[0]) (void)begin_pairing();
                 }
-                memset(&command, 0, sizeof(command));
-                break;
-            case CMD_CONFIRM: confirm_pairing(); break;
-            case CMD_REFRESH:
-                if (registered && (xEventGroupGetBits(events) & IP_READY)) refresh_theme();
-                else update(H2H_CLOUD_OFFLINE, "Connect Wi-Fi first");
-                break;
+                memset(&command,0,sizeof(command)); break;
+            case CMD_CONFIRM: confirm_pairing(&command); break;
+            case CMD_REFRESH: if(xEventGroupGetBits(events)&IP_READY) (void)sync_device(); else update(H2H_CLOUD_OFFLINE,"Connect Wi-Fi first"); break;
             case CMD_FORGET:
-                allow_reconnect = false;
-                (void)esp_wifi_disconnect();
-                (void)esp_wifi_stop();
-                wifi_started = false;
+                allow_reconnect=false; (void)esp_wifi_disconnect(); (void)esp_wifi_stop(); wifi_started=false;
                 {
                     nvs_handle_t handle;
-                    if (nvs_open("h2h_cloud", NVS_READWRITE, &handle) == ESP_OK) {
-                        (void)nvs_erase_key(handle, "ssid"); (void)nvs_erase_key(handle, "wifi_pass");
-                        (void)nvs_commit(handle); nvs_close(handle);
+                    if(nvs_open("h2h_cloud",NVS_READWRITE,&handle)==ESP_OK) {
+                        esp_err_t error=nvs_erase_key(handle,"ssid");
+                        if(error==ESP_OK || error==ESP_ERR_NVS_NOT_FOUND) error=nvs_erase_key(handle,"wifi_pass");
+                        if(error==ESP_OK || error==ESP_ERR_NVS_NOT_FOUND) error=nvs_commit(handle);
+                        nvs_close(handle); if(error!=ESP_OK) update(H2H_CLOUD_ERROR,"Wi-Fi clear failed");
                     }
                 }
-                ssid_saved[0] = password_saved[0] = 0;
-                if (xSemaphoreTake(state_lock, portMAX_DELAY) == pdTRUE) {
-                    state.wifi_ready = false; xSemaphoreGive(state_lock);
-                }
-                update(H2H_CLOUD_SETUP, "Wi-Fi cleared");
-                break;
+                ssid_saved[0]=password_saved[0]=0; update(H2H_CLOUD_SETUP,"Wi-Fi cleared"); break;
             }
         }
-        if (account_open && pairing_id[0] && (uint32_t)(xTaskGetTickCount() - next_poll) >= pdMS_TO_TICKS(3000)) {
-            poll_pairing(); next_poll = xTaskGetTickCount();
+        uint32_t now=(uint32_t)xTaskGetTickCount();
+        if((xEventGroupGetBits(events)&IP_READY) && (uint32_t)(now-next_sync)>=pdMS_TO_TICKS(15000)) { (void)sync_device(); next_sync=now; }
+        if(account_open && pairing_id[0] && (uint32_t)(now-next_poll)>=pdMS_TO_TICKS(3000)) {
+            if((uint32_t)(now-pair_started)>=pdMS_TO_TICKS(300000)) {
+                if(xSemaphoreTake(state_lock,portMAX_DELAY)==pdTRUE) {
+                    pairing_id[0]=0; pair_account=0; state.pair_url[0]=0; xSemaphoreGive(state_lock);
+                }
+                update(H2H_CLOUD_READY,"QR expired; open again");
+            } else poll_pairing();
+            next_poll=now;
         }
     }
 }
 static bool enqueue(command_type_t type, const char *ssid, const char *password) {
-    if (!queue) return false;
-    command_t command = {.type = type};
-    if (ssid) { if (strlen(ssid)>32) return false; strcpy(command.ssid, ssid); }
-    if (password) { if (strlen(password)>64) return false; strcpy(command.password, password); }
-    bool result = xQueueSend(queue, &command, 0) == pdTRUE;
-    memset(&command, 0, sizeof(command));
-    return result;
+    if(!queue) return false;
+    command_t command={.type=type};
+    if(ssid) { if(strlen(ssid)>32) return false; strcpy(command.ssid,ssid); }
+    if(password) { if(strlen(password)>64) return false; strcpy(command.password,password); }
+    bool result=xQueueSend(queue,&command,0)==pdTRUE; memset(&command,0,sizeof(command)); return result;
 }
 esp_err_t h2h_cloud_start(void) {
-    state_lock = xSemaphoreCreateMutex();
-    events = xEventGroupCreate();
-    queue = xQueueCreate(4, sizeof(command_t));
-    themes = xQueueCreate(1, sizeof(h2h_theme_t));
-    if (!state_lock || !events || !queue || !themes) return ESP_ERR_NO_MEM;
-    memset(&state, 0, sizeof(state));
-    state.state = H2H_CLOUD_SETUP;
-    strcpy(state.message, "Set up Wi-Fi with phone");
-    if (!load_identity()) return ESP_FAIL;
+    state_lock=xSemaphoreCreateMutex(); events=xEventGroupCreate(); queue=xQueueCreate(4,sizeof(command_t));
+    if(!state_lock || !events || !queue) return ESP_ERR_NO_MEM;
+    memset(&state,0,sizeof(state)); state.state=H2H_CLOUD_SETUP; strcpy(state.message,"Activation required; use phone");
+    h2h_pocket_init(&pocket,h2h_track_count,h2h_song_count);
+    if(!load_identity()) { pocket.healthy=false; return ESP_FAIL; }
     nvs_handle_t handle;
-    if (nvs_open("h2h_cloud", NVS_READONLY, &handle) == ESP_OK) {
-        uint8_t bound = 0; (void)nvs_get_u8(handle, "bound", &bound);
-        state.bound = bound != 0; nvs_close(handle);
-    }
-    return xTaskCreate(worker, "h2h_cloud", 8192, NULL, 5, NULL) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
+    if(nvs_open("h2h_cloud",NVS_READONLY,&handle)!=ESP_OK) { pocket.healthy=false; return ESP_FAIL; }
+    unsigned char bytes[H2H_POCKET_RECORD_SIZE]; size_t length=sizeof(bytes);
+    esp_err_t error=nvs_get_blob(handle,"pocket_v2",bytes,&length); nvs_close(handle);
+    if(error==ESP_OK) {
+        if(!h2h_pocket_decode(&pocket,bytes,length)) strcpy(state.message,"Stored state invalid; locked");
+    } else if(error==ESP_ERR_NVS_NOT_FOUND) {
+        // Legacy bound/state records are preserved but never unlock or auto-import.
+        h2h_pocket_encode(&pocket.record,bytes);
+        if(!write_record(bytes,sizeof(bytes),NULL)) pocket.healthy=false;
+    } else pocket.healthy=false;
+    if(!pocket.healthy) { update(H2H_CLOUD_ERROR,"Storage invalid; locked"); return ESP_FAIL; }
+    return xTaskCreate(worker,"h2h_cloud",8192,NULL,5,NULL)==pdPASS?ESP_OK:ESP_ERR_NO_MEM;
 }
-bool h2h_cloud_wifi(const char *ssid, const char *password) { return ssid && password && enqueue(CMD_WIFI, ssid, password); }
-bool h2h_cloud_open(void) { return enqueue(CMD_OPEN, NULL, NULL); }
-bool h2h_cloud_close(void) { return enqueue(CMD_CLOSE, NULL, NULL); }
-bool h2h_cloud_confirm(void) { return enqueue(CMD_CONFIRM, NULL, NULL); }
-bool h2h_cloud_refresh(void) { return enqueue(CMD_REFRESH, NULL, NULL); }
-bool h2h_cloud_forget_wifi(void) { return enqueue(CMD_FORGET, NULL, NULL); }
-bool h2h_cloud_poll_theme(h2h_theme_t *out) { return out && themes && xQueueReceive(themes, out, 0) == pdTRUE; }
-void h2h_cloud_theme_applied(bool persisted) {
-    if (events) xEventGroupSetBits(events, THEME_DONE | (persisted ? THEME_SAVED : 0));
+bool h2h_cloud_model(h2h_save_t *save, uint64_t *epoch, uint64_t *generation) {
+    if(!save || !epoch || !generation || !state_lock || xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return false;
+    bool ok=pocket.healthy;
+    if(ok) { *save=pocket.record.save; *epoch=pocket.record.ownership.epoch; *generation=pocket.model_generation; }
+    xSemaphoreGive(state_lock); return ok;
 }
+bool h2h_cloud_local_save(uint64_t epoch, uint64_t generation, const h2h_save_t *save) {
+    if(!state_lock || xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return false;
+    bool ok=generation==pocket.model_generation && h2h_pocket_local_save(&pocket,epoch,save,write_record,NULL);
+    xSemaphoreGive(state_lock); return ok;
+}
+bool h2h_cloud_can_play(void) {
+    if(!state_lock || xSemaphoreTake(state_lock,pdMS_TO_TICKS(100))!=pdTRUE) return false;
+    bool allowed=h2h_pocket_can_play(&pocket); xSemaphoreGive(state_lock); return allowed;
+}
+bool h2h_cloud_can_play_at(uint64_t epoch, uint64_t generation) {
+    if(!state_lock || xSemaphoreTake(state_lock,pdMS_TO_TICKS(100))!=pdTRUE) return false;
+    bool allowed=epoch==pocket.record.ownership.epoch && generation==pocket.model_generation && h2h_pocket_can_play(&pocket);
+    xSemaphoreGive(state_lock); return allowed;
+}
+bool h2h_cloud_unbind(uint64_t epoch, uint64_t generation) {
+    if(!state_lock || xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return false;
+    char operation[33];
+    if(pocket.record.ownership.pending_unbind[0]) strcpy(operation,pocket.record.ownership.pending_unbind); else hex_random(operation,16);
+    bool ok=epoch==pocket.record.ownership.epoch && generation==pocket.model_generation && h2h_pocket_unbind(&pocket,operation,write_record,NULL);
+    state.bound=false; state.pair_url[0]=0;
+    strcpy(state.message,ok?"Unbound locally; sync pending":"Unbind save failed; locked");
+    xSemaphoreGive(state_lock); if(ok) (void)enqueue(CMD_REFRESH,NULL,NULL); return ok;
+}
+bool h2h_cloud_restore(uint64_t epoch, uint64_t generation) {
+    if(!state_lock || xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return false;
+    bool ok=epoch==pocket.record.ownership.epoch && generation==pocket.model_generation && h2h_pocket_restore_cloud(&pocket,write_record,NULL);
+    xSemaphoreGive(state_lock); return ok;
+}
+bool h2h_cloud_wifi(const char *ssid, const char *password) { return ssid && password && enqueue(CMD_WIFI,ssid,password); }
+bool h2h_cloud_open(void) { return enqueue(CMD_OPEN,NULL,NULL); }
+bool h2h_cloud_close(void) { return enqueue(CMD_CLOSE,NULL,NULL); }
+bool h2h_cloud_confirm(void) {
+    if(!queue || xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return false;
+    command_t command={.type=CMD_CONFIRM,.epoch=pair_epoch,.account=pair_account};
+    strcpy(command.code,pairing_id);
+    bool allowed=state.state==H2H_CLOUD_CLAIMED && command.account && command.code[0];
+    xSemaphoreGive(state_lock);
+    return allowed && xQueueSend(queue,&command,0)==pdTRUE;
+}
+bool h2h_cloud_refresh(void) { return enqueue(CMD_REFRESH,NULL,NULL); }
+bool h2h_cloud_forget_wifi(void) { return enqueue(CMD_FORGET,NULL,NULL); }

@@ -4,7 +4,7 @@
 
 /* Persist as one NVS blob. Caller must fail closed if persistence fails.
  * Not a device identity: never delete the independent per-device credential.
- * This pure protocol state is not yet wired into h2h_cloud/main. */
+ * h2h_pocket persists this state with the current save as one validated record. */
 typedef struct {
     uint64_t epoch;
     uint64_t pending_epoch;

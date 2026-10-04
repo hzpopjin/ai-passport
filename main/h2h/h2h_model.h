@@ -16,6 +16,7 @@ typedef struct {
     h2h_save_t save;
     h2h_page_t page;
     unsigned selection, track, track_count, song_count, generation, last_unlock;
+    bool activation_required, play_allowed;
     bool want_play, audio_error, dirty, game_paused, game_settled, suppress_ok;
     uint32_t countdown_ms, pose_ms, game_ms, game_step_ms, spawn_ms, rng;
     unsigned caught, game_reward, basket;
@@ -30,6 +31,7 @@ typedef struct {
 void h2h_init(h2h_model_t *m, unsigned track_count, unsigned song_count, uint32_t seed);
 bool h2h_load(h2h_model_t *m, const void *data, size_t size);
 void h2h_save_snapshot(const h2h_model_t *m, h2h_save_t *out);
+void h2h_activation(h2h_model_t *m, bool allowed);
 void h2h_input(h2h_model_t *m, h2h_key_t key, h2h_event_t event);
 void h2h_tick(h2h_model_t *m, uint32_t elapsed_ms);
 void h2h_listened(h2h_model_t *m, uint32_t pcm_ms);
