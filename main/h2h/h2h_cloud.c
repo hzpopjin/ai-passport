@@ -16,12 +16,14 @@
 #include "mbedtls/sha256.h"
 #include "mbedtls/base64.h"
 #include "h2h_tracks.h"
+#include "h2h_resource_runtime.h"
 #include <math.h>
 #include <inttypes.h>
 #include "nvs.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <strings.h>
 
 #define API "https://apps.randomdance.cn/api/v1/passport"
 #define IP_READY BIT0
@@ -250,12 +252,88 @@ static bool parse_save(const cJSON *data, h2h_pocket_reply_t *out) {
     if(strcmp(sha,computed)!=0) return false;
     out->has_save=true; return true;
 }
+typedef struct { uint64_t epoch,generation; uint32_t revision; char sha[65]; } resource_request_t;
+typedef struct { reply_t reply; char range[80]; } resource_chunk_t;
+static esp_err_t resource_http_event(esp_http_client_event_t *event) {
+    resource_chunk_t *chunk=event->user_data;
+    if(event->event_id==HTTP_EVENT_ON_HEADER && event->header_key && event->header_value && !strcasecmp(event->header_key,"Content-Range"))
+        snprintf(chunk->range,sizeof(chunk->range),"%s",event->header_value);
+    if(event->event_id==HTTP_EVENT_ON_DATA) {
+        esp_http_client_event_t data=*event;data.user_data=&chunk->reply;return http_event(&data);
+    }
+    return ESP_OK;
+}
+static bool resource_fetch(size_t offset,void *out,size_t length,void *ctx) {
+    resource_request_t *r=ctx;
+    if(!h2h_cloud_can_play_at(r->epoch,r->generation)||!length||length>1024)return false;
+    char url[256],range[64],expected[80];
+    snprintf(url,sizeof(url),API "/device/resources/%s/blob?expected_epoch=%" PRIu64 "&resource_revision=%" PRIu32,r->sha,r->epoch,r->revision);
+    snprintf(range,sizeof(range),"bytes=%u-%u",(unsigned)offset,(unsigned)(offset+length-1));
+    snprintf(expected,sizeof(expected),"bytes %u-%u/%u",(unsigned)offset,(unsigned)(offset+length-1),H2H_RESOURCE_BYTES);
+    resource_chunk_t chunk={0};esp_http_client_config_t config={.url=url,.method=HTTP_METHOD_GET,.timeout_ms=8000,
+        .crt_bundle_attach=esp_crt_bundle_attach,.event_handler=resource_http_event,.user_data=&chunk,.disable_auto_redirect=true};
+    esp_http_client_handle_t client=esp_http_client_init(&config);if(!client)return false;
+    (void)esp_http_client_set_header(client,"X-Passport-Device",state.device_id);(void)esp_http_client_set_header(client,"X-Passport-Token",secret);
+    (void)esp_http_client_set_header(client,"Range",range);(void)esp_http_client_set_header(client,"Accept-Encoding","identity");
+    esp_err_t error=esp_http_client_perform(client);int status=esp_http_client_get_status_code(client);esp_http_client_cleanup(client);
+    bool ok=error==ESP_OK&&status==206&&!chunk.reply.overflow&&chunk.reply.length==length&&!strcmp(expected,chunk.range)&&h2h_cloud_can_play_at(r->epoch,r->generation);
+    if(ok)memcpy(out,chunk.reply.body,length);
+    return ok;
+}
+static bool hex_bytes(const char *hex,unsigned char *out,size_t length) {
+    if(strlen(hex)!=2*length)return false;
+    for(size_t i=0;i<length;i++){unsigned a,b;char x=hex[2*i],y=hex[2*i+1];
+        if(x>='0'&&x<='9')a=(unsigned)(x-'0');else if(x>='a'&&x<='f')a=(unsigned)(x-'a'+10);else return false;
+        if(y>='0'&&y<='9')b=(unsigned)(y-'0');else if(y>='a'&&y<='f')b=(unsigned)(y-'a'+10);else return false;out[i]=(unsigned char)((a<<4)|b);
+    }return true;
+}
+static bool resource_ack(const resource_request_t *request,const char *status) {
+    if(!h2h_cloud_can_play_at(request->epoch,request->generation))return false;
+    char payload[256];snprintf(payload,sizeof(payload),"{\"expected_epoch\":%" PRIu64 ",\"resource_revision\":%" PRIu32 ",\"sha256\":\"%s\",\"status\":\"%s\"}",request->epoch,request->revision,request->sha,status);
+    cJSON *data=NULL;bool ok=api_json("/device/resources/ack",HTTP_METHOD_POST,payload,true,&data);cJSON_Delete(data);return ok;
+}
+static void process_resource(const cJSON *data) {
+    if(!h2h_resource_runtime_available())return;
+    resource_request_t request={0};uint64_t revision=0;h2h_save_t ignored;
+    if(!number(data,"ownership_epoch",&request.epoch)||!number(data,"resource_revision",&revision)||revision>UINT32_MAX)return;
+    uint64_t current_epoch;
+    if(!h2h_cloud_model(&ignored,&current_epoch,&request.generation)||current_epoch!=request.epoch||!h2h_cloud_can_play_at(request.epoch,request.generation))return;
+    request.revision=(uint32_t)revision;
+    const cJSON *selection=cJSON_GetObjectItemCaseSensitive(data,"resource_selection");
+    if(cJSON_IsNull(selection)) {
+        strcpy(request.sha,"builtin");
+        if(revision&&h2h_resource_runtime_failed(request.epoch,request.revision)){(void)resource_ack(&request,"failed");return;}
+        h2h_resource_runtime_builtin(request.epoch,request.generation,request.revision);
+        if(revision&&h2h_resource_runtime_installed(request.epoch,request.revision,NULL))(void)resource_ack(&request,"installed");
+        return;
+    }
+    char id[33],signature[89],kind[24],model[32];uint64_t value=0;unsigned char sha[32];
+    if(!cJSON_IsObject(selection)||!revision||!field(selection,"id",id,sizeof(id))||!field(selection,"sha256",request.sha,sizeof(request.sha))||!hex_bytes(request.sha,sha,32))return;
+    if(h2h_resource_runtime_installed(request.epoch,request.revision,sha)){(void)resource_ack(&request,"installed");return;}
+    if(h2h_resource_runtime_failed(request.epoch,request.revision)){(void)resource_ack(&request,"failed");return;}
+    char path[192];snprintf(path,sizeof(path),"/device/resources/%s/manifest?expected_epoch=%" PRIu64 "&resource_revision=%" PRIu32,request.sha,request.epoch,request.revision);
+    cJSON *manifest=NULL;if(!api_json(path,HTTP_METHOD_GET,NULL,true,&manifest))return;
+    h2h_resource_manifest_t m={0};char digest_hex[65];size_t decoded=0;
+    bool ok=field(manifest,"resource_id",m.id,sizeof(m.id))&&!strcmp(m.id,id)&&field(manifest,"model",model,sizeof(model))&&!strcmp(model,"esp32c3-pocket-8m")&&
+        number(manifest,"format_version",&value)&&value==2&&number(manifest,"size",&value)&&value==H2H_RESOURCE_BYTES&&
+        number(manifest,"decoded_bytes",&value)&&value==15360&&field(manifest,"kind",kind,sizeof(kind));
+    if(ok){if(!strcmp(kind,"member_visual"))m.kind=1;else if(!strcmp(kind,"group_visual"))m.kind=2;else ok=false;}
+    if(ok&&number(manifest,"version",&value)&&value>0&&value<=UINT32_MAX)m.version=(uint32_t)value;else ok=false;
+    if(ok&&number(manifest,"min_firmware",&value)&&value>0&&value<=UINT32_MAX)m.min_firmware=(uint32_t)value;else ok=false;
+    if(ok&&number(manifest,"max_firmware",&value)&&value>0&&value<=UINT32_MAX)m.max_firmware=(uint32_t)value;else ok=false;
+    ok=ok&&field(manifest,"key_id",m.key_id,sizeof(m.key_id))&&field(manifest,"sha256",digest_hex,sizeof(digest_hex))&&!strcmp(digest_hex,request.sha)&&hex_bytes(digest_hex,m.sha256,32)&&
+       field(manifest,"signature",signature,sizeof(signature))&&mbedtls_base64_decode(m.signature,sizeof(m.signature),&decoded,(const unsigned char *)signature,strlen(signature))==0&&decoded==64;
+    cJSON_Delete(manifest);
+    if(ok)ok=h2h_resource_runtime_prepare(&m,request.epoch,request.generation,request.revision,resource_fetch,&request);
+    if(ok){bool accepted=resource_ack(&request,"verified");h2h_resource_runtime_approve(request.epoch,request.revision,accepted);}
+    else {(void)resource_ack(&request,"failed");update(H2H_CLOUD_BOUND,"Resource failed; previous kept");}
+}
 static bool sync_device(void) {
     h2h_pocket_record_t sent;
     if(xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return false;
     if(!pocket.healthy) { xSemaphoreGive(state_lock); return false; }
     sent=pocket.record; xSemaphoreGive(state_lock);
-    char payload[768], save_part[320]="", unbind_part[150]="";
+    char payload[1280], save_part[320]="", unbind_part[150]="";
     if(sent.ownership.pending_unbind[0]) {
         snprintf(unbind_part,sizeof(unbind_part),",\"pending_unbind\":{\"operation_id\":\"%s\",\"expected_epoch\":%" PRIu64 "}",
                  sent.ownership.pending_unbind,sent.ownership.pending_epoch);
@@ -269,7 +347,13 @@ static bool sync_device(void) {
         snprintf(save_part,sizeof(save_part),",\"save\":{\"base_revision\":%" PRIu64 ",\"schema\":1,\"sha256\":\"%s\",\"data\":\"%s\"}",
                  sent.revision,sha,base64);
     }
-    snprintf(payload,sizeof(payload),"{\"ownership_epoch\":%" PRIu64 "%s%s}",sent.ownership.epoch,unbind_part,save_part);
+    cJSON *capabilities=cJSON_CreateObject(),*keys=cJSON_CreateArray();char key_ids[8][33];unsigned key_count=h2h_resource_runtime_keys(key_ids);
+    for(unsigned i=0;i<key_count;i++)cJSON_AddItemToArray(keys,cJSON_CreateString(key_ids[i]));
+    cJSON_AddNumberToObject(capabilities,"firmware",H2H_RESOURCE_FIRMWARE);cJSON_AddNumberToObject(capabilities,"resource_format",2);
+    cJSON_AddNumberToObject(capabilities,"resource_capacity",h2h_resource_runtime_available()?H2H_RESOURCE_SLOT_BYTES:0);cJSON_AddItemToObject(capabilities,"resource_keys",keys);
+    char *encoded_capabilities=cJSON_PrintUnformatted(capabilities);cJSON_Delete(capabilities);if(!encoded_capabilities)return false;
+    int payload_size=snprintf(payload,sizeof(payload),"{\"ownership_epoch\":%" PRIu64 "%s%s,\"capabilities\":%s}",sent.ownership.epoch,unbind_part,save_part,encoded_capabilities);
+    cJSON_free(encoded_capabilities);if(payload_size<0||(size_t)payload_size>=sizeof(payload))return false;
     cJSON *data=NULL;
     if(!api_json("/device/sync",HTTP_METHOD_POST,payload,true,&data)) { update(H2H_CLOUD_OFFLINE,"Sync unavailable; offline"); return false; }
     h2h_pocket_reply_t reply={0}; uint64_t account=0;
@@ -306,6 +390,7 @@ static bool sync_device(void) {
         } else { state.state=H2H_CLOUD_ERROR; strcpy(state.message,"State rejected or save failed"); }
         xSemaphoreGive(state_lock);
     }
+    if(ok)process_resource(data);
     cJSON_Delete(data); return ok;
 }
 static bool begin_pairing(void) {
@@ -379,7 +464,7 @@ static void worker(void *arg) {
                 }
                 memset(&command,0,sizeof(command)); break;
             case CMD_CONFIRM: confirm_pairing(&command); break;
-            case CMD_REFRESH: if(xEventGroupGetBits(events)&IP_READY) (void)sync_device(); else update(H2H_CLOUD_OFFLINE,"Connect Wi-Fi first"); break;
+            case CMD_REFRESH: h2h_resource_runtime_retry(); if(xEventGroupGetBits(events)&IP_READY) (void)sync_device(); else update(H2H_CLOUD_OFFLINE,"Connect Wi-Fi first"); break;
             case CMD_FORGET:
                 allow_reconnect=false; (void)esp_wifi_disconnect(); (void)esp_wifi_stop(); wifi_started=false;
                 {
@@ -432,7 +517,7 @@ esp_err_t h2h_cloud_start(void) {
         if(!write_record(bytes,sizeof(bytes),NULL)) pocket.healthy=false;
     } else pocket.healthy=false;
     if(!pocket.healthy) { update(H2H_CLOUD_ERROR,"Storage invalid; locked"); return ESP_FAIL; }
-    return xTaskCreate(worker,"h2h_cloud",8192,NULL,5,NULL)==pdPASS?ESP_OK:ESP_ERR_NO_MEM;
+    return xTaskCreate(worker,"h2h_cloud",16384,NULL,5,NULL)==pdPASS?ESP_OK:ESP_ERR_NO_MEM;
 }
 bool h2h_cloud_model(h2h_save_t *save, uint64_t *epoch, uint64_t *generation) {
     if(!save || !epoch || !generation || !state_lock || xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return false;
@@ -453,6 +538,11 @@ bool h2h_cloud_can_play_at(uint64_t epoch, uint64_t generation) {
     if(!state_lock || xSemaphoreTake(state_lock,pdMS_TO_TICKS(100))!=pdTRUE) return false;
     bool allowed=epoch==pocket.record.ownership.epoch && generation==pocket.model_generation && h2h_pocket_can_play(&pocket);
     xSemaphoreGive(state_lock); return allowed;
+}
+bool h2h_cloud_guarded_write(uint64_t epoch,uint64_t generation,bool (*write)(const void *,size_t,void *),const void *bytes,size_t length,void *ctx) {
+    if(!state_lock || !write || xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE)return false;
+    bool ok=epoch==pocket.record.ownership.epoch && generation==pocket.model_generation && h2h_pocket_can_play(&pocket) && write(bytes,length,ctx);
+    xSemaphoreGive(state_lock);return ok;
 }
 bool h2h_cloud_unbind(uint64_t epoch, uint64_t generation) {
     if(!state_lock || xSemaphoreTake(state_lock,portMAX_DELAY)!=pdTRUE) return false;

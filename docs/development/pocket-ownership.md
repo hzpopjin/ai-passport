@@ -5,7 +5,7 @@
 The product application now connects `main.c`, `h2h_cloud.c`, the pure
 `h2h_ownership`/`h2h_pocket` engines, and NVS. This is tested source, not a
 released or board-validated firmware. The authoritative contract is
-`random-dance-platform/docs/POCKET_PASSPORT.md` (2026-10-04, backend 3.8.1).
+`random-dance-platform/docs/POCKET_PASSPORT.md` (2026-10-04, backend 3.9.0).
 One device has one owner; an account may have many devices with independent
 progress. Migration explicitly replaces the target, without merging.
 
@@ -64,16 +64,17 @@ no recovery export/UI or version history yet; another restore can replace this
 slot, and a new ownership period clears it.
 
 BLE aa00/aa01/aa02, 20-byte frames, opcodes 1–5 and SC/MITM/passkey are unchanged.
-Opcode 5 requests sync; it does not install a resource pack. The account screen
+Opcode 5 requests sync, including the selected visual resource on compatible cards. The account screen
 also exposes Forget Wi-Fi, Unbind and Restore. QR/PIN/action layout needs real
 240×320 display and camera readability tests.
 
 ## Resources, NFC and validation boundaries
 
-The 16-byte theme index is not an asset pack. Factory-only Flash has no safe
-OTA slot. Separate resource/firmware manifests, measured Flash/RAM budgets,
-verified inactive storage, atomic switch, power-loss recovery and rollback
-remain implementation work. No partition or production signing root changed.
+The 16-byte theme index is not an asset pack. Signed visual resource installation
+is implemented with a separate opt-in A/B data layout; the default partitions
+are unchanged. Music switching and firmware OTA remain blocked by budget and
+missing original assets. See [visual resources](pocket-resources.md) for the
+measured-source lower bounds, format, failure behavior and remaining checks.
 NTAG213 carries a fixed random-slug HTTPS URL, not ownership proof or a secret;
 the MCU cannot rewrite it. Server public fields are opt-in; domain routing and
 physical tag writing/locking remain unverified.

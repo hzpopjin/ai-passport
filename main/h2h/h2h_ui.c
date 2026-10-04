@@ -2,6 +2,7 @@
 #include "h2h_motion.h"
 #include "h2h_tracks.h"
 #include "lvgl.h"
+#include "src/misc/cache/instance/lv_image_cache.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -25,6 +26,26 @@ static int old_page = -1;
 static unsigned old_selection = 999, old_room = 999, old_cards = 999, old_track = 999;
 static int sprite_x,sprite_y;
 static unsigned last_pose = 999, last_outfit = 999;
+static const unsigned char *resource_bytes;
+static uint32_t resource_generation;
+static h2h_resource_labels_t resource_labels;
+static lv_image_dsc_t resource_sprites[3][5], resource_icons[4];
+void h2h_ui_resources(const h2h_resource_view_t *view) {
+    const unsigned char *bytes=view?view->bytes:NULL;
+    uint32_t generation=view?view->generation:0;
+    if(resource_bytes==bytes && resource_generation==generation)return;
+    // The caller holds LVGL and retains the previous mapping through the rebuild.
+    lv_image_cache_drop(NULL);
+    resource_bytes=bytes;resource_generation=generation;old_page=-1;
+    if(!view)return;
+    resource_labels=view->labels;
+    for(unsigned outfit=0;outfit<3;outfit++)for(unsigned pose=0;pose<5;pose++)
+        resource_sprites[outfit][pose]=(lv_image_dsc_t){.header={.magic=LV_IMAGE_HEADER_MAGIC,.cf=LV_COLOR_FORMAT_RGB565A8,.w=64,.h=80,.stride=128},
+            .data_size=15360,.data=bytes+512+(outfit*5+pose)*15360};
+    for(unsigned i=0;i<4;i++)resource_icons[i]=(lv_image_dsc_t){.header={.magic=LV_IMAGE_HEADER_MAGIC,.cf=LV_COLOR_FORMAT_RGB565A8,.w=16,.h=16,.stride=32},
+        .data_size=768,.data=bytes+512+15*15360+i*768};
+}
+static const lv_image_dsc_t *sprite_image(unsigned outfit,unsigned pose){return resource_bytes?&resource_sprites[outfit%3][pose%5]:h2h_sprites[outfit%3][pose%5];}
 static lv_obj_t *box(lv_obj_t *parent,int x,int y,int w,int h,uint32_t bg,int radius) {
     lv_obj_t *o=lv_obj_create(parent); lv_obj_remove_style_all(o);
     lv_obj_set_pos(o,x,y); lv_obj_set_size(o,w,h);
@@ -40,7 +61,7 @@ static lv_obj_t *text(lv_obj_t *parent,int x,int y,int w,const char *value,uint3
 static void center_text(lv_obj_t *o) { lv_obj_set_style_text_align(o,LV_TEXT_ALIGN_CENTER,0); }
 static void room_decor(unsigned room) {
     const uint32_t backgrounds[]={SKY,0xEBF3CE,0xF8E5EE};
-    box(screen,12,43,216,199,backgrounds[room%3],18);
+    box(screen,12,43,216,199,resource_bytes?resource_labels.room_colors[room%3]:backgrounds[room%3],18);
     if(room==0) {
         box(screen,154,58,54,58,0xFFFEF9,12); box(screen,159,63,44,48,0xBDE5F5,8);
         box(screen,178,63,4,48,0xFFFEF9,0); box(screen,159,85,44,4,0xFFFEF9,0);
@@ -57,7 +78,7 @@ static void room_decor(unsigned room) {
 }
 static void make_sprite(int x,int y,int scale) {
     sprite=lv_image_create(screen); lv_obj_set_pos(sprite,x,y);
-    lv_image_set_src(sprite,h2h_sprites[0][0]); lv_image_set_scale(sprite,scale);
+    lv_image_set_src(sprite,sprite_image(0,0)); lv_image_set_scale(sprite,scale);
     lv_image_set_antialias(sprite,false); sprite_x=x; sprite_y=y; last_pose=last_outfit=999;
 }
 static void make_row(int index,int y,const char *name,bool selected,bool locked) {
@@ -71,23 +92,23 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
     lv_obj_set_style_bg_opa(screen,LV_OPA_COVER,0); lv_obj_remove_flag(screen,LV_OBJ_FLAG_SCROLLABLE);
     memset(rows,0,sizeof(rows)); memset(row_text,0,sizeof(row_text)); memset(falling,0,sizeof(falling));
     sprite=detail=progress=progress_text=basket=NULL; memset(hearts,0,sizeof(hearts)); memset(gesture_hearts,0,sizeof(gesture_hearts));
-    title=text(screen,24,12,112,"H2H POCKET",INK);
+    title=text(screen,24,12,112,resource_bytes?resource_labels.group:"H2H POCKET",INK);
     status=text(screen,130,12,87,"",INK); lv_obj_set_style_text_align(status,LV_TEXT_ALIGN_RIGHT,0);
     hint=text(screen,20,286,200,"↑ ↓ 选择   ● 打开",INK); center_text(hint);
-    const char *name="H2H POCKET";
+    const char *name=resource_bytes?resource_labels.group:"H2H POCKET";
     switch(m->page) {
     case H2H_HOME:
         room_decor(m->save.room); make_sprite(88,94,512);
         for(unsigned i=0;i<6;i++) box(screen,91+(int)i*10,231,5,5,i==m->selection?INK:BLUE,3);
         rows[0]=box(screen,16,244,208,34,LEMON,12);
         text(rows[0],8,7,16,"←",INK); text(rows[0],184,7,16,"→",INK);
-        center_text(text(rows[0],28,7,152,home_names[m->selection],INK));
+        center_text(text(rows[0],28,7,152,resource_bytes&&m->selection==0?resource_labels.title:home_names[m->selection],INK));
         break;
     case H2H_ROOM: {
-        name="IAN 小房间"; room_decor(m->save.room); make_sprite(88,94,512);
+        name=resource_bytes?resource_labels.member:"IAN 小房间"; room_decor(m->save.room); make_sprite(88,94,512);
         for(int i=0;i<4;i++) {
             rows[i]=box(screen,16+i*54,246,46,34,m->selection==(unsigned)i?LEMON:SKY,10);
-            lv_obj_t *icon=lv_image_create(rows[i]); lv_image_set_src(icon,h2h_icons[i]);
+            lv_obj_t *icon=lv_image_create(rows[i]); lv_image_set_src(icon,resource_bytes?&resource_icons[i]:h2h_icons[i]);
             lv_obj_set_pos(icon,15,9); lv_image_set_scale(icon,512); lv_image_set_antialias(icon,false);
         }
         if(m->selection>=2) { detail=text(screen,22,221,196,m->selection==2?outfits[m->save.outfit]:rooms[m->save.room],INK); center_text(detail); }
@@ -149,12 +170,12 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
     case H2H_CARD:
         name="心动收藏"; box(screen,18,44,204,226,m->selection%2?PINK:SKY,16);
         center_text(text(screen,29,55,182,card_names[m->selection],INK)); make_sprite(88,111,512);
-        text(screen,44,239,152,"IAN / H2H",INK);
+        text(screen,44,239,152,resource_bytes?resource_labels.member:"IAN / H2H",INK);
         lv_label_set_text(hint,"♥ 设为应援牌"); break;
     case H2H_BADGE:
-        name="IAN 应援牌"; room_decor(m->save.room); make_sprite(88,113,512);
-        center_text(text(screen,22,51,196,"I A N",INK));
-        detail=text(screen,20,251,200,m->save.badge_card<8?card_names[m->save.badge_card]:"HEARTS2HEARTS",INK); center_text(detail);
+        name=resource_bytes?resource_labels.member:"IAN 应援牌"; room_decor(m->save.room); make_sprite(88,113,512);
+        center_text(text(screen,22,51,196,resource_bytes?resource_labels.member:"I A N",INK));
+        detail=text(screen,20,251,200,m->save.badge_card<8?card_names[m->save.badge_card]:(resource_bytes?resource_labels.group:"HEARTS2HEARTS"),INK); center_text(detail);
         for(int i=0;i<4;i++) hearts[i]=text(screen,27+i*53,103+i*29,20,"♥",0xEAAFCA);
         lv_label_set_text(hint,"长按确定返回"); break;
     case H2H_SETTINGS: {
@@ -233,7 +254,7 @@ void h2h_ui_render(const h2h_model_t *m,unsigned position,bool playing,int batte
         unsigned outfit=m->save.outfit;
         if(m->page==H2H_CARD) { pose=m->selection%5; outfit=m->selection%3; }
         if(m->page==H2H_BADGE && m->save.badge_card<8) { outfit=m->save.badge_card%3; if(!playing) pose=m->save.badge_card%5; }
-        if(pose!=last_pose || outfit!=last_outfit) { lv_image_set_src(sprite,h2h_sprites[outfit][pose]); last_pose=pose; last_outfit=outfit; }
+        if(pose!=last_pose || outfit!=last_outfit) { lv_image_set_src(sprite,sprite_image(outfit,pose)); last_pose=pose; last_outfit=outfit; }
         lv_obj_set_pos(sprite,sprite_x+motion.dx,sprite_y+motion.dy);
         for(int i=0;i<3;i++) if(gesture_hearts[i]) {
             if(motion.hearts) { lv_obj_remove_flag(gesture_hearts[i],LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(gesture_hearts[i],112+i*14-(int)((m->animation_ms/60+(unsigned)i*7)%24)); }

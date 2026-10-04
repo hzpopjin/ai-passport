@@ -4,7 +4,7 @@
 
 产品应用已连接 `main.c`、`h2h_cloud.c`、纯 `h2h_ownership`/`h2h_pocket` 引擎及 NVS。
 这是经过主机测试的源码，不是已发布或真机验证的固件。跨仓权威合同为
-`random-dance-platform/docs/POCKET_PASSPORT.md`（2026-10-04，后端 3.8.1）。
+`random-dance-platform/docs/POCKET_PASSPORT.md`（2026-10-04，后端 3.9.0）。
 每设备一个主人，每账号可多设备，各自独立进度；迁移需显式确认替换目标，不合并。
 
 实际主循环在按键和音频之前启用激活门禁。未配对不能离开账号页玩游戏。
@@ -46,14 +46,15 @@ epoch 变化先清除旧进度/recovery，再接受当前周期的云快照；�
 再次恢复可替换该槽，新主人周期会清除它。
 
 BLE aa00/aa01/aa02、20 字节帧、操作码 1–5 和 SC/MITM/passkey 无变化。
-操作码 5 请求 sync，不安装资源包。账号页还提供 Forget Wi-Fi、Unbind、Restore。
+操作码 5 请求 sync，兼容卡片同步时可安装所选签名视觉资源。账号页还提供 Forget Wi-Fi、Unbind、Restore。
 二维码/PIN/按钮布局需真实 240×320 屏幕和相机识别测试。
 
 ## 资源、NFC 与验证边界
 
-16 字节主题索引不是资源包，factory 单槽无安全 OTA。资源与固件各自的 manifest、
-实测 Flash/RAM 预算、非活动区校验、原子切换、断电恢复与回退仍待实现。
-本次未修改分区或生产签名信任根。NTAG213 保存固定随机 slug HTTPS URL，不证明权属、
+16 字节主题索引不是资源包。签名视觉资源已接入可选 A/B 数据分区，默认分区保持原样。
+完整音乐切换与固件 OTA 仍受预算及原始素材缺失阻塞。详见
+[视觉资源](pocket-resources.zh_CN.md)中的真实数据下限、格式、失败处理与待验事项。
+生产签名信任根未修改。NTAG213 保存固定随机 slug HTTPS URL，不证明权属、
 不带 secret，MCU 不能重写。服务端公开字段需主动开启；域名路由与标签写入/锁定待验。
 
 ownership、activation、pocket 持久化主机测试在 C11、警告视为错误模式下通过。

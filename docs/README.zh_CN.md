@@ -219,3 +219,5 @@ AI 助手请从 [`AGENTS.md`](../AGENTS.md) 开始，再按任务路由读取相
 
 [IAN 小伙伴：操作、歌曲打包、预览与验收](assets/h2h-pocket.zh_CN.md)。
 - [Agent 接手文档](assets/h2h-agent-handoff.zh_CN.md)
+
+- [视觉资源格式、签名安装与 Flash 预算](development/pocket-resources.zh_CN.md)

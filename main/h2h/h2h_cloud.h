@@ -21,6 +21,8 @@ bool h2h_cloud_model(h2h_save_t *save, uint64_t *epoch, uint64_t *generation);
 bool h2h_cloud_local_save(uint64_t epoch, uint64_t generation, const h2h_save_t *save);
 bool h2h_cloud_can_play(void);
 bool h2h_cloud_can_play_at(uint64_t epoch, uint64_t generation);
+bool h2h_cloud_guarded_write(uint64_t epoch, uint64_t generation,
+    bool (*write)(const void *, size_t, void *), const void *bytes, size_t length, void *ctx);
 /* These run in the app loop, not in a button callback. Pending unbind must
  * commit before success is returned; the worker performs network I/O later. */
 bool h2h_cloud_unbind(uint64_t epoch, uint64_t generation);

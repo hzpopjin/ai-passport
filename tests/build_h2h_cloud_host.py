@@ -30,10 +30,12 @@ def build(output, dependency_dir):
         if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
             raise RuntimeError(f"Existing cJSON integrity mismatch: {target}")
     subprocess.run([
-        os.environ.get("CC", "cc"), "-std=c11", "-Wall", "-Wextra", "-Werror",
-        "-Itests/pocket_stubs", f"-I{dependency_dir}", "-Imain/h2h",
+        os.environ.get("CC", "cc"), "-std=c11", "-Wall", "-Wextra", "-Werror", "-DCONFIG_ESP_MAIN_TASK_STACK_SIZE=12288",
+        "-Itests/pocket_stubs", "-Icomponents/pocket_crypto", f"-I{dependency_dir}", "-Imain/h2h",
         "tests/test_h2h_cloud_host.c", "main/h2h/h2h_pocket.c",
         "main/h2h/h2h_ownership.c", "main/h2h/h2h_model.c",
+        "main/h2h/h2h_resource.c", "main/h2h/h2h_resource_runtime.c",
+        "components/pocket_crypto/monocypher.c", "components/pocket_crypto/monocypher-ed25519.c",
         str(dependency_dir / "cJSON.c"), "-lcrypto", "-lm", "-o", str(output),
     ], cwd=ROOT, check=True)
     return output

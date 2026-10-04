@@ -225,3 +225,5 @@ AI agents: start with [`AGENTS.md`](../AGENTS.md) and follow its task-specific r
 
 [IAN companion: controls, music packing, preview and acceptance](assets/h2h-pocket.md).
 - [Agent handoff](assets/h2h-agent-handoff.md)
+
+- [Visual resource format, signed installation and Flash budget](development/pocket-resources.md)

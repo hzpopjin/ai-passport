@@ -87,6 +87,19 @@ run_static_checks() {
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain/h2h \
         tests/test_h2h_activation.c main/h2h/h2h_model.c -o "${test_dir}/test_h2h_activation"
     "${test_dir}/test_h2h_activation"
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_h2h_resource_tools.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tools/h2h/build_visual_resource.py "${test_dir}/visual"
+    local crypto_flags=(-lcrypto)
+    if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists openssl; then
+        read -r -a crypto_flags <<< "$(pkg-config --cflags --libs openssl)"
+    fi
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain/h2h -Icomponents/pocket_crypto \
+        tests/test_h2h_resource.c main/h2h/h2h_resource.c \
+        components/pocket_crypto/monocypher.c components/pocket_crypto/monocypher-ed25519.c \
+        "${crypto_flags[@]}" -o "${test_dir}/test_h2h_resource"
+    local visual_file
+    visual_file="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["manifest"]["sha256"]+".bin")' "${test_dir}/visual/unsigned-entry.json")"
+    "${test_dir}/test_h2h_resource" "${test_dir}/visual/${visual_file}"
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_h2h_assets.py
     PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_h2h_*web.py'
     PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_h2h_nfc_ndef.py'

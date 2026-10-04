@@ -27,6 +27,7 @@ typedef int esp_err_t;
 #define WIFI_AUTH_OPEN 0
 #define SNTP_OPMODE_POLL 0
 #define HTTP_EVENT_ON_DATA 1
+#define HTTP_EVENT_ON_HEADER 2
 #define MALLOC_CAP_8BIT 1
 #define ESP_LOGI(tag,...) ((void)(tag))
 #define ESP_LOGW(tag,...) ((void)(tag))
@@ -42,7 +43,7 @@ typedef struct { int unused; } wifi_init_config_t;
 #define WIFI_INIT_CONFIG_DEFAULT() ((wifi_init_config_t){0})
 typedef struct { struct { uint8_t ssid[32],password[64]; struct { int authmode; } threshold; struct { bool capable; } pmf_cfg; } sta; } wifi_config_t;
 typedef enum { HTTP_METHOD_GET, HTTP_METHOD_POST } esp_http_client_method_t;
-typedef struct { int event_id,data_len; const char *data; void *user_data; } esp_http_client_event_t;
+typedef struct { int event_id,data_len; const char *data; void *user_data; const char *header_key,*header_value; } esp_http_client_event_t;
 typedef struct {
     const char *url; esp_http_client_method_t method; int timeout_ms;
     esp_err_t (*crt_bundle_attach)(void *);
@@ -116,3 +117,22 @@ bool bsp_lvgl_lock(unsigned);
 void bsp_lvgl_unlock(void);
 esp_err_t bsp_battery_init(void);
 int bsp_battery_soc(void);
+
+typedef struct { unsigned address,size; int type,subtype; bool encrypted,readonly; } esp_partition_t;
+typedef unsigned esp_partition_mmap_handle_t;
+#define ESP_PARTITION_TYPE_APP 0
+#define ESP_PARTITION_TYPE_DATA 1
+#define ESP_PARTITION_SUBTYPE_APP_FACTORY 0
+#define ESP_PARTITION_MMAP_DATA 0
+const esp_partition_t *esp_partition_find_first(int,int,const char *);
+esp_err_t esp_partition_read(const esp_partition_t *,size_t,void *,size_t);
+esp_err_t esp_partition_write(const esp_partition_t *,size_t,const void *,size_t);
+esp_err_t esp_partition_erase_range(const esp_partition_t *,size_t,size_t);
+esp_err_t esp_partition_mmap(const esp_partition_t *,size_t,size_t,int,const void **,esp_partition_mmap_handle_t *);
+void esp_partition_munmap(esp_partition_mmap_handle_t);
+typedef struct { void *ctx; } mbedtls_sha256_context;
+void mbedtls_sha256_init(mbedtls_sha256_context *);
+void mbedtls_sha256_free(mbedtls_sha256_context *);
+int mbedtls_sha256_starts(mbedtls_sha256_context *,int);
+int mbedtls_sha256_update(mbedtls_sha256_context *,const unsigned char *,size_t);
+int mbedtls_sha256_finish(mbedtls_sha256_context *,unsigned char [32]);

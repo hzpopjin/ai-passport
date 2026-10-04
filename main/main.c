@@ -5,6 +5,7 @@
 #include "h2h_ble.h"
 #include "h2h_cloud.h"
 #include "h2h_theme.h"
+#include "h2h_resource_runtime.h"
 #include "bsp_display.h"
 #include "bsp_button.h"
 #include "bsp_battery.h"
@@ -35,6 +36,7 @@ void app_main(void) {
     bool nvs_ready=nvs_flash_init()==ESP_OK;
     bool cloud_ok=nvs_ready && h2h_cloud_start()==ESP_OK;
     bool storage_ok=cloud_ok;
+    if(cloud_ok && h2h_resource_runtime_start()!=ESP_OK) ESP_LOGI(TAG,"Resource slots unavailable; using built-in visuals");
     if(!cloud_ok) ESP_LOGW(TAG,"Account/storage service unavailable; locked");
     uint64_t model_epoch=0, model_generation=0;
     unsigned confirm_action=5; uint64_t confirm_until=0;
@@ -142,8 +144,11 @@ void app_main(void) {
                 int passkey=-1; uint32_t pin;
                 if(ble_ok && h2h_ble_passkey(&pin)) passkey=(int)pin;
                 if(confirm_action<5 && now<confirm_until) snprintf(cloud.message,sizeof(cloud.message),"%s? Click OK again",confirm_action==3?"Unbind":"Restore cloud");
+                const h2h_resource_view_t *resources=h2h_resource_runtime_view_begin(model_epoch,model_generation);
+                h2h_ui_resources(resources);
                 h2h_ui_render(&model,model.position_ms,audio.generation==model.generation && audio.playing,battery,storage_ok,input_ok,(unsigned)now,
                               &cloud,ble_ok && h2h_ble_connected(),passkey);
+                h2h_resource_runtime_view_end();
                 bsp_lvgl_unlock();
             }
             last_render=now;
