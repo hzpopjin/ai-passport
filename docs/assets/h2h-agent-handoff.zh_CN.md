@@ -28,13 +28,21 @@ Git／源码包不包含个人 `.ogg`、`.bin` 录音、原始 MP3、`build/`、
 
 要复现原目录，请向所有者取得匹配的 `track_000` 到 `track_013` 的 `.ogg`／`.bin` 资源，放入 `assets/music/h2h/`，按 `catalog.json` 校验哈希。顺序为七首完整歌曲，再接相同顺序的七段副歌。不要将录音上传到 GitHub。
 
+从 API 获取音乐时，遵循[直连音乐来源与凭证范围](h2h-pocket.zh_CN.md#打包歌曲)：
+`config/pocket-music-source.json` 使用 `https://chunyin.jilllees.top:8443/api`
+及仅供主机工具使用的 `POCKET_MUSIC_API_KEY`。运行
+`python3 tools/h2h/music_source.py` 只检查变量存在性，不读取 Key；可选
+`--probe` 不携带凭证。音乐中转只能使用 `apps.randomdance.cn`，目前没有
+已核验的代理路由。停用来源的诊断及原目录哈希保留为历史记录，
+不得把 API 新录音当成原哈希对应的文件，也不改变 Passport 账号／配对端点。
+
 也可通过打包器清单提供有授权的本地源文件，重新生成目录：
 
 ```sh
 python3 tools/h2h/pack_music.py --manifest /path/to/songs.json --song-count 7
 ```
 
-清单格式见[打包音乐](h2h-pocket.zh_CN.md#打包音乐)。重新生成可能改变时长与哈希，应审查 `catalog.json`、`tracks.c`、`music.cmake`。需要带 libopus 的 FFmpeg 和 ffprobe。不要擅自用测试音频替换所有者的录音。
+清单格式见[打包歌曲](h2h-pocket.zh_CN.md#打包歌曲)。重新生成可能改变时长与哈希，应审查 `catalog.json`、`tracks.c`、`music.cmake`。需要带 libopus 的 FFmpeg 和 ffprobe。不要擅自用测试音频替换所有者的录音。
 
 未恢复音频时，`python3 tools/h2h/preview.py` 仍可进行视觉导航；音频请求失败、资源完整性测试失败，固件嵌入步骤无法完成。对不依赖录音的开发可使用纯模型／主题／音频 worker 测试及账户／信息卡／NFC 测试；恢复后再运行完整验证。
 

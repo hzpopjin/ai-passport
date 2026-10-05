@@ -28,6 +28,15 @@ The Git/source package excludes personal `.ogg` and `.bin` recordings, original 
 
 For the exact catalog, obtain the matching `track_000` through `track_013` `.ogg`/`.bin` resources from the owner and place them in `assets/music/h2h/`. Check hashes against `catalog.json`. They are seven complete songs followed by the seven corresponding chorus clips, in the same order. Do not upload the recordings to GitHub.
 
+For API acquisition, follow the [direct music source and credential scope](h2h-pocket.md#pack-music)
+in `config/pocket-music-source.json`: `https://chunyin.jilllees.top:8443/api` and
+the host-only `POCKET_MUSIC_API_KEY`. Run `python3 tools/h2h/music_source.py`
+to check presence without reading the key; optional `--probe` sends no credentials.
+Only `apps.randomdance.cn` may mediate music, and no proxy route is verified.
+Retired source diagnostics and original catalog hashes remain historical records.
+Do not substitute new API recordings for the original hashes or change the
+Passport account/pairing endpoints.
+
 Alternatively provide authorized local source files through the packer manifest and regenerate the catalogs:
 
 ```sh

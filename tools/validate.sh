@@ -88,6 +88,7 @@ run_static_checks() {
         tests/test_h2h_activation.c main/h2h/h2h_model.c -o "${test_dir}/test_h2h_activation"
     "${test_dir}/test_h2h_activation"
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_h2h_resource_tools.py
+    PYTHONDONTWRITEBYTECODE=1 python3 tests/test_h2h_music_source.py
     PYTHONDONTWRITEBYTECODE=1 python3 tools/h2h/build_visual_resource.py "${test_dir}/visual"
     local crypto_flags=(-lcrypto)
     if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists openssl; then

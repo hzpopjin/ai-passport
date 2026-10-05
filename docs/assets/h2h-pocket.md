@@ -57,6 +57,26 @@ Open <http://127.0.0.1:8877>. Use the displayed buttons or arrow keys/Enter; Esc
 
 ## Pack music
 
+Authorized API acquisition uses the direct source
+`https://chunyin.jilllees.top:8443/api`, recorded in
+[`config/pocket-music-source.json`](../../config/pocket-music-source.json).
+Check the host environment with `python3 tools/h2h/music_source.py`; optional
+`--probe` checks the API root without credentials or redirects. This checks
+readiness only and does not download songs or validate a credential.
+
+Set a dedicated `POCKET_MUSIC_API_KEY` through the host environment's secure
+secret configuration, scoped only to `https://chunyin.jilllees.top:8443`.
+Do not reuse an open-platform key, copy a key from chat, or place its value in
+firmware, browser code, manifests, URLs, commands or logs. The readiness tool
+checks presence without reading or exporting the value. Authentication details
+and song IDs/versions must be verified before an authenticated downloader is
+implemented or run. If mediation is necessary, only `apps.randomdance.cn` is
+permitted; no Pocket music proxy route has been implemented or verified, so
+`proxy_route` remains null. The Passport account/pairing APIs are unchanged.
+Retired proxy diagnostics remain historical evidence and must not drive new
+downloads. Keep existing catalog hashes and their original recording provenance;
+record API-acquired files with their actual IDs, versions and new hashes.
+
 FFmpeg with libopus and ffprobe are required. Original inputs are read only.
 
 ```sh

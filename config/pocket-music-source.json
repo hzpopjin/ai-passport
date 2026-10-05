@@ -1,0 +1,7 @@
+{
+  "api_base_url": "https://chunyin.jilllees.top:8443/api",
+  "api_key_env": "POCKET_MUSIC_API_KEY",
+  "credential_scope": "https://chunyin.jilllees.top:8443",
+  "permitted_proxy_host": "apps.randomdance.cn",
+  "proxy_route": null
+}

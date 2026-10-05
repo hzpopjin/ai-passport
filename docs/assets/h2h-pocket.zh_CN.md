@@ -57,6 +57,23 @@ python3 tools/h2h/preview.py
 
 ## 打包歌曲
 
+经授权从 API 获取音乐时，使用直连来源
+`https://chunyin.jilllees.top:8443/api`，配置记录在
+[`config/pocket-music-source.json`](../../config/pocket-music-source.json)。
+运行 `python3 tools/h2h/music_source.py` 检查主机环境；可选的 `--probe`
+不携带凭证、不跟随重定向，仅检查 API 根地址的可达性。
+该工具只检查准备状态，不下载歌曲，也不验证凭证是否有效。
+
+通过主机环境的安全 secret 配置设置专用 `POCKET_MUSIC_API_KEY`，
+使用范围仅限 `https://chunyin.jilllees.top:8443`。
+不得复用开放平台 Key、从聊天复制 Key，或将其值放入固件、浏览器代码、
+清单、URL、命令或日志。检查工具只确认变量是否存在，不读取或导出值。
+实现或运行带认证的下载器前，必须核实认证方式及歌曲 ID／版本。
+如必须中转，只允许 `apps.randomdance.cn`；目前没有已实现并核验的
+Pocket 音乐代理路由，因此 `proxy_route` 保持 null。Passport 账号／配对
+API 保持不变。停用代理的诊断记录仅作为历史证据，不得驱动新下载。
+保留已有目录哈希及原始录音来源；API 获取的文件须记录真实 ID、版本和新哈希。
+
 需要带 libopus 的 FFmpeg 和 ffprobe；输入原文件只读，不修改。
 
 ```sh
