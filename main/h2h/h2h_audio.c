@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include <string.h>
 
 static const char *TAG="h2h_audio";
@@ -12,6 +13,12 @@ static portMUX_TYPE mutex=portMUX_INITIALIZER_UNLOCKED;
 static h2h_audio_request_t requested;
 static h2h_audio_status_t status;
 static TaskHandle_t task;
+static SemaphoreHandle_t stopped;
+static bool stop_requested;
+static esp_err_t stop_result;
+static bool should_stop(void) {
+    portENTER_CRITICAL(&mutex); bool stop=stop_requested; portEXIT_CRITICAL(&mutex); return stop;
+}
 void h2h_audio_request(const h2h_audio_request_t *r) { portENTER_CRITICAL(&mutex); requested=*r; portEXIT_CRITICAL(&mutex); }
 static h2h_audio_request_t read_request(void) { portENTER_CRITICAL(&mutex); h2h_audio_request_t r=requested; portEXIT_CRITICAL(&mutex); return r; }
 h2h_audio_status_t h2h_audio_status(void) { portENTER_CRITICAL(&mutex); h2h_audio_status_t s=status; portEXIT_CRITICAL(&mutex); return s; }
@@ -24,9 +31,16 @@ static void worker(void *arg) {
     unsigned generation=0, volume=101, packet_index=0;
     uint64_t target_sample=0;
     bool awake=false, terminal=false;
-    esp_err_t init=bsp_audio_init();
-    if(init==ESP_OK) init=bsp_audio_sleep();
+    esp_err_t init=ESP_ERR_INVALID_STATE;
     for(;;) {
+        if(should_stop()) {
+            if(decoder) { esp_opus_dec_close(decoder); decoder=NULL; }
+            stop_result=bsp_audio_deinit();
+            s.playing=false; publish(&s);
+            xSemaphoreGive(stopped);
+            /* The owner frees this stack only after the acknowledgement. */
+            for(;;) vTaskSuspend(NULL);
+        }
         h2h_audio_request_t r=read_request();
         if(r.generation!=generation) {
             if(decoder) { esp_opus_dec_close(decoder); decoder=NULL; }
@@ -86,7 +100,7 @@ static void worker(void *arg) {
         if(end>song_end) end=song_end;
         if(end>keep_begin) {
             h2h_audio_request_t latest=read_request();
-            if(latest.generation!=generation) continue;
+            if(latest.generation!=generation || should_stop()) continue;
             /* Finish one bounded frame on pause, then keep its next position. */
             size_t samples=(size_t)(end-keep_begin);
             if(bsp_audio_write(output+(keep_begin-begin)*2,samples*2)!=ESP_OK) goto fail;
@@ -103,7 +117,21 @@ fail:
     }
 }
 esp_err_t h2h_audio_start(void) {
-    if(task) return ESP_OK;
+    if(task) return should_stop()?ESP_ERR_INVALID_STATE:ESP_OK;
+    stopped=xSemaphoreCreateBinary();
+    if(!stopped) return ESP_ERR_NO_MEM;
+    portENTER_CRITICAL(&mutex); stop_requested=false; portEXIT_CRITICAL(&mutex);
     /* Fixed-size 20 ms Opus packets live consecutively in Flash. */
-    return xTaskCreate(worker,"h2h_audio",24576,NULL,5,&task)==pdPASS?ESP_OK:ESP_ERR_NO_MEM;
+    if(xTaskCreate(worker,"h2h_audio",24576,NULL,5,&task)==pdPASS) return ESP_OK;
+    vSemaphoreDelete(stopped); stopped=NULL; task=NULL; return ESP_ERR_NO_MEM;
+}
+esp_err_t h2h_audio_stop(void) {
+    if(!task) return ESP_OK;
+    portENTER_CRITICAL(&mutex); stop_requested=true; requested.play=false; portEXIT_CRITICAL(&mutex);
+    if(xSemaphoreTake(stopped,pdMS_TO_TICKS(1000))!=pdTRUE) return ESP_ERR_TIMEOUT;
+    /* Single-core owner runs only after the worker has parked. */
+    vTaskDelete(task); task=NULL;
+    vSemaphoreDelete(stopped); stopped=NULL;
+    portENTER_CRITICAL(&mutex); stop_requested=false; memset(&status,0,sizeof(status)); portEXIT_CRITICAL(&mutex);
+    return stop_result;
 }

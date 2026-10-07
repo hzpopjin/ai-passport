@@ -50,3 +50,18 @@
 使用与重新生成命令见 [H2H Pocket 说明](../docs/assets/h2h-pocket.zh_CN.md)。
 
 操作栏图标使用 `images/h2h/icons.json` 中四个原创 16 × 16 像素图形，由 `tools/h2h/build_icons.py` 导出对应的 `icons.c` RGB565A8 资源（3,072 字节）。电脑预览读取同一份图形，不依赖 Emoji 或特殊符号字体。
+
+## STAYC 原生素材
+
+- `images/stayc/source/`：所有者提供的 Pocket v15 视觉资源，源提交为 `ff013044ebbeaf9c781b1a6c93bfc572b5cf4d89`。原 PNG／JSON 保留六名成员、每人两套服装、每套 32 姿态，共 384 姿态。这是既有粉丝项目图像，清单保留生成与验收来源；不声称官方背书或商业再分发许可。
+- `images/stayc/stayc_visuals.bin`：1,853,859 字节的 RGB565+A8 显示像素有界 RLE。`sprites.c` 保留实测锚点、登记偏移与场景比例。内存中同时只保留一帧 15,360 字节解码数据。RGB888 转 RGB565 降低显示色彩精度，后续 RLE 无损。重建命令为 `python3 tools/h2h/pack_stayc_visuals.py assets/images/stayc/source --output assets/images/stayc`。
+- `images/stayc/actions.c`：由提供的原 JS 适配的阶段表，以及三个房间与装饰几何。阶段／几何导出本身不等于完整实现 v15 生活、装饰和小卡反应状态契约。
+- `music/stayc/track_000`–`track_011`：所有者传入的既有 Opus 资源，依次为六首真实 STAYC 全曲及对应六段副歌。Ogg 合计 2,778,319 字节，固件嵌入的原样 40 字节数据包合计 2,673,560 字节。提取保留数据包，不进行有损重编码。参数为 16 kbps CBR Opus、单声道、48 kHz、20 ms，解码为 16 位 PCM。曲名、时长与哈希见 `music/stayc/catalog.json`；录音保持 Git 忽略。权利归权利人，未提供再分发许可。
+
+原生目标明确选择 STAYC 素材，原 H2H 目录独立保留。
+[当前原生交接](../docs/assets/h2h-agent-handoff.zh_CN.md#stayc-原生继续开发)
+记录实现边界与验证结果。
+
+## 公开分发边界
+
+相关版权内容仅供个人学习、研究，禁止商用，参见[版权与素材声明](../docs/assets/copyright-notice.zh_CN.md)。STAYC 提供的图片、生成图片资源、参考 JS／WASM、记录的参考轨迹及五组直接移植模块已排除出 Git，音乐继续排除；上文描述的是保留本地材料的清单，不是公开授权或下载内容。MIT 覆盖的源码和 OFL 字体继续遵循各自许可。

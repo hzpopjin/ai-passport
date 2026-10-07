@@ -6,8 +6,10 @@ from fontTools.ttLib import TTFont
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'assets/fonts/h2h'
 text=''.join(p.read_text() for p in (ROOT/'main/h2h').glob('*.c'))
-for t in json.loads((ROOT/'assets/music/h2h/catalog.json').read_text())['tracks']:
-    text+=t['title']+t['artist']
+text+=(ROOT/'assets/images/stayc/actions.c').read_text()
+for catalog in ('h2h','stayc'):
+    for t in json.loads((ROOT/f'assets/music/{catalog}/catalog.json').read_text())['tracks']:
+        text+=t['title']+t['artist']
 chars=set(chr(c) for c in range(32,127)) | {c for c in text if ord(c)>=127 and c.isprintable()}
 font=TTFont(OUT/'NotoSansSC.ttf'); coverage=font.getBestCmap()
 missing=[c for c in sorted(chars) if ord(c) not in coverage]

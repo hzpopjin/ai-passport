@@ -1,5 +1,6 @@
 #pragma once
 #include "h2h_resource.h"
+#include "h2h_resource_protocol.h"
 #include "esp_err.h"
 typedef struct { const unsigned char *bytes; h2h_resource_labels_t labels; uint32_t generation; } h2h_resource_view_t;
 typedef bool (*h2h_resource_fetch_fn)(size_t offset, void *out, size_t length, void *ctx);
@@ -8,6 +9,12 @@ bool h2h_resource_key_at(unsigned index, char id[33], unsigned char key[32]);
 esp_err_t h2h_resource_runtime_start(void);
 bool h2h_resource_runtime_available(void);
 unsigned h2h_resource_runtime_keys(char ids[8][33]);
+void h2h_resource_runtime_capabilities(h2h_resource_capabilities_t *out,bool wifi_usable);
+/* Existing cloud worker only, outside its model mutex. TLS callback is bounded
+ * to a single validated <=1024-byte range; failure can fall back to signed BLE. */
+typedef bool (*h2h_resource_tls_fetch_fn)(const h2h_resource_job_t *,void *out,void *ctx);
+h2h_resource_work_status_t h2h_resource_runtime_execute(const h2h_resource_job_t *job,
+    h2h_resource_progress_t *out,h2h_resource_tls_fetch_fn tls_fetch,void *ctx);
 bool h2h_resource_runtime_prepare(const h2h_resource_manifest_t *m,uint64_t epoch,uint64_t model_generation,
                                   uint32_t revision,h2h_resource_fetch_fn fetch,void *ctx);
 void h2h_resource_runtime_approve(uint64_t epoch,uint32_t revision,bool accepted);

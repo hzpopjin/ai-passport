@@ -366,6 +366,12 @@ int main(void) {
     assert(bsp_audio_init() == ESP_OK);
     assert(bsp_audio_set_format(16000, 16, 1) == ESP_OK);
     assert_active();
+    unsigned released=ctrl_deletions;
+    assert(bsp_audio_deinit()==ESP_OK);
+    assert(!s_tx && !s_rx && !s_dev && !s_data && !s_ctrl && !s_gpio && !s_initialized);
+    assert(ctrl_deletions==released+1 && bsp_audio_deinit()==ESP_OK);
+    assert(bsp_audio_init()==ESP_OK && bsp_audio_set_format(48000,16,1)==ESP_OK);
+    assert_active();
     // Failure to release a dependency reference is distinct from an I2C fault:
     // public delete has freed the object, so fail closed until reboot instead of
     // constructing against an uncertain reference count and reporting success.

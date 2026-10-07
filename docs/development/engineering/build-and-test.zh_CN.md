@@ -28,6 +28,22 @@ idf.py flash monitor          # 可选：增量 app 烧录
 idf.py fullclean              # 只清空过期生成状态（勿用于清理用户源码改动）
 ```
 
+当请求要求保留现有最小 NVS／PHY／factory 布局，并且不生成填充合并镜像时，
+使用显式分段模式：
+
+```sh
+./tools/validate.sh --all --segmented
+python3 tools/archive_segmented_firmware.py verify build/firmware-segmented/<app-sha256>
+```
+
+该模式保存应用、bootloader、分区表、完整生成的 `flash_args`／`flasher_args.json`、
+匹配的 ELF／MAP 和哈希清单；检查默认布局完全一致、8 MiB 镜像头、应用至少保留
+512 KiB 空间、ELF 身份，以及各段擦除扇区不接触 NVS 和 PHY 数据。
+它不生成合并文件，也不写设备。默认验证流程仍打包合并镜像。分段模式有意拒绝
+自定义分区或额外写入镜像；这些配置继续使用普通布局验证。
+按[数据策略](firmware-layout.zh_CN.md#烧录与已存数据)核实设备现有布局与
+bootloader 兼容性后，再选择实际刷写哪些段。
+
 `idf.py fullclean` 不能让已有 `sdkconfig` 完整同步变更后的 defaults。需要重建
 target 或已跟踪 defaults 时，先保留有意的本地设置，再运行
 `idf.py set-target esp32c3`。
@@ -129,6 +145,13 @@ cc -std=c11 -Wall -Wextra -Werror -Imain \
 ```
 
 静态门禁还将真实 BSP 和 demo 实现与轻量平台桩编译在一起，故障注入覆盖任务退出交接与停止重试、录音失败、Wi-Fi/BLE 启动回滚、按键分配与 ADC 错误、LVGL 初始化锁与重试、codec 打开/休眠/唤醒恢复。只需主机 C 编译器和 Python，不依赖 ESP-IDF 或已下载的 Managed Components。这些测试不代表真实时序、电气行为或设备兼容性；固件门禁会使用锁定依赖进行编译。
+
+配对 STAYC 门禁还执行真实 v15 WASM／原生玩法轨迹、真实浏览器 JS／WASM 播放器
+比较、本地扩展 codec／恢复故障，以及真实 cloud／main 的主机 SDK 桩集成测试。
+这些需 Node.js、Python、主机 C 编译器及 OpenSSL 开发库。cJSON 测试依赖以逐文件
+SHA256 固定；可用命令作用域的 `H2H_CJSON_DIR` 指向已核验 cJSON 1.7.19 目录，
+离线复用。不设置时 helper 使用本地缓存及官方上游下载。该测试依赖不替换任何固件
+Managed Component。
 
 统一验证入口：
 

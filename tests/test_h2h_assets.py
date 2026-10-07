@@ -2,34 +2,36 @@
 import hashlib,importlib.util,json,re,struct,tempfile,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+MUSIC=ROOT/'assets/music/stayc'
 spec=importlib.util.spec_from_file_location('packer',ROOT/'tools/h2h/pack_music.py');packer=importlib.util.module_from_spec(spec);spec.loader.exec_module(packer)
 class Assets(unittest.TestCase):
     def test_music_integrity_and_opus_header(self):
-        catalog=json.loads((ROOT/'assets/music/h2h/catalog.json').read_text())
+        catalog=json.loads((MUSIC/'catalog.json').read_text())
         self.assertGreater(len(catalog['tracks']),0)
         self.assertEqual(catalog['encoding'],'Opus CBR 16000 bps, mono, 48000 Hz, 20 ms')
-        self.assertEqual(catalog['song_count'],7)
-        self.assertEqual(len(catalog['tracks']),14)
+        self.assertEqual(catalog['song_count'],6)
+        self.assertEqual(len(catalog['tracks']),12)
+        self.assertTrue(all(t['artist']=='STAYC' for t in catalog['tracks']))
         self.assertLessEqual(catalog['flash_audio_bytes'],5*1024*1024)
         self.assertEqual(catalog['seek_index_bytes'],0)
         for song in range(catalog['song_count']):
             self.assertEqual(catalog['tracks'][song]['title'],catalog['tracks'][song+catalog['song_count']]['title'])
         for track in catalog['tracks']:
-            data=(ROOT/'assets/music/h2h'/track['file']).read_bytes()
+            data=(MUSIC/track['file']).read_bytes()
             self.assertEqual(len(data),track['bytes']);self.assertEqual(hashlib.sha256(data).hexdigest(),track['sha256'])
             self.assertTrue(data.startswith(b'OggS'))
             pos=data.index(b'OpusHead');self.assertEqual(data[pos+9],1)
             self.assertEqual(struct.unpack_from('<I',data,pos+12)[0],48000)
             self.assertGreater(track['duration_ms'],0)
     def test_seek_index_and_rejection(self):
-        catalog=json.loads((ROOT/'assets/music/h2h/catalog.json').read_text())
+        catalog=json.loads((MUSIC/'catalog.json').read_text())
         for track in catalog['tracks']:
-            data=(ROOT/'assets/music/h2h'/track['file']).read_bytes()
+            data=(MUSIC/track['file']).read_bytes()
             packets,pre,pcm=packer.opus_index(data)
             self.assertEqual(len(packets),track['packet_count'])
             self.assertEqual(round(pcm/48),track['duration_ms'])
             self.assertEqual(track['seek_index_bytes'],0)
-            raw=(ROOT/'assets/music/h2h'/track['flash_file']).read_bytes()
+            raw=(MUSIC/track['flash_file']).read_bytes()
             self.assertEqual(raw,b''.join(data[offset:offset+length] for offset,length in packets))
             self.assertEqual(len(raw),track['flash_bytes'])
             self.assertEqual(hashlib.sha256(raw).hexdigest(),track['flash_sha256'])
@@ -56,7 +58,7 @@ class Assets(unittest.TestCase):
         inventory=set((ROOT/'assets/fonts/h2h/glyphs.txt').read_text())
         for src in (ROOT/'main/h2h').glob('*.c'):
             for char in set(re.findall('[\u3400-\u9fff]',src.read_text())): self.assertIn(char,inventory)
-        for track in json.loads((ROOT/'assets/music/h2h/catalog.json').read_text())['tracks']:
+        for track in json.loads((MUSIC/'catalog.json').read_text())['tracks']:
             for char in track['title']+track['artist']:self.assertIn(char,inventory)
         font=(ROOT/'assets/fonts/h2h/h2h_font_16.c').read_text()
         self.assertIn('h2h_font_16',font)

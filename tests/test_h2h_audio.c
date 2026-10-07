@@ -10,18 +10,30 @@ const unsigned h2h_track_count=1;
 const unsigned h2h_song_count=1;
 static jmp_buf done;
 static unsigned scenario,delays,writes,opens,sleeps,decoded,samples,next_sample;
-static bool paused,resumed;
+static bool paused,resumed,drive_stop,task_fail,signaled;
+static unsigned init_calls,deinits,deletes,sem_deletes,task_creations;
+SemaphoreHandle_t xSemaphoreCreateBinary(void) { signaled=false;return &signaled; }
+int xSemaphoreGive(SemaphoreHandle_t handle) { assert(handle==&signaled);signaled=true;return pdTRUE; }
+int xSemaphoreTake(SemaphoreHandle_t handle,unsigned timeout) {
+    assert(handle==&signaled && timeout==1000);
+    if(!signaled && drive_stop && !setjmp(done)) worker(NULL);
+    bool result=signaled;signaled=false;return result;
+}
+void vSemaphoreDelete(SemaphoreHandle_t handle) { assert(handle==&signaled);++sem_deletes; }
+void vTaskSuspend(TaskHandle_t handle) { assert(!handle && signaled);longjmp(done,2); }
+void vTaskDelete(TaskHandle_t handle) { assert(handle==(void *)1 && !signaled);++deletes; }
+esp_err_t bsp_audio_deinit(void) { ++deinits;return ESP_OK; }
 int xTaskCreate(void (*fn)(void *),const char *name,unsigned stack,void *arg,unsigned priority,TaskHandle_t *handle) {
-    (void)name;(void)arg;assert(fn==worker && stack>=8192 && priority>0);*handle=(void *)1;return pdPASS;
+    (void)name;(void)arg;assert(fn==worker && stack==24576 && priority>0);++task_creations;if(task_fail)return 0;*handle=(void *)1;return pdPASS;
 }
 void vTaskDelay(unsigned ticks) {
     (void)ticks;assert(++delays<1000);
     h2h_audio_status_t s=h2h_audio_status();
     if(s.ended || s.failed) longjmp(done,1);
-    if(scenario==8 && !resumed) { assert(!writes && !decoded && s.position_ms==100);requested.play=true;resumed=true; }
+    if(scenario==8 && !resumed) { assert(!init_calls && !writes && !decoded && s.position_ms==100);requested.play=true;resumed=true; }
     if(paused && !s.playing) { requested.play=true;resumed=true; }
 }
-esp_err_t bsp_audio_init(void) { return ESP_OK; }
+esp_err_t bsp_audio_init(void) { ++init_calls;return ESP_OK; }
 esp_err_t bsp_audio_sleep(void) { ++sleeps; return ESP_OK; }
 esp_err_t bsp_audio_wake(void) { return scenario==6?ESP_FAIL:ESP_OK; }
 esp_err_t bsp_audio_set_format(uint32_t hz,uint8_t bits,uint8_t channels) { assert(hz==48000 && bits==16 && channels==1);return ESP_OK; }
@@ -56,7 +68,7 @@ int main(void) {
     for(unsigned i=0;i<9;i++) compressed[i*64]=(uint8_t)i;
     assert(h2h_audio_start()==ESP_OK);assert(h2h_audio_start()==ESP_OK);
     for(scenario=0;scenario<=9;scenario++) {
-        delays=writes=opens=sleeps=decoded=samples=0;paused=resumed=false;next_sample=scenario==7 || scenario==8?5112:312;
+        init_calls=delays=writes=opens=sleeps=decoded=samples=0;paused=resumed=false;next_sample=scenario==7 || scenario==8?5112:312;
         memset(&status,0,sizeof(status));requested=(h2h_audio_request_t){1,0,35,scenario!=8,scenario==7 || scenario==8?100:0};
         if(!setjmp(done)) worker(NULL);
         h2h_audio_status_t s=h2h_audio_status();
@@ -65,11 +77,19 @@ int main(void) {
             assert(s.ended && !s.failed && s.position_ms==170 && s.played_samples==samples);
             unsigned expected=scenario==2?8808:scenario==7 || scenario==8?3360:scenario==9?4008:8160;
             assert(samples==expected && next_sample==8472);
-            if(scenario==1) assert(resumed && sleeps>=2);
+            if(scenario==1) assert(resumed && sleeps>=1);
             if(scenario==2 || scenario==9) assert(opens==2 && s.generation==2);
             if(scenario==7 || scenario==8) assert(decoded==9 && writes==4);
             if(scenario==8) assert(resumed);
         }
     }
+    assert(task_creations==1 && !deinits);
+    assert(h2h_audio_stop()==ESP_ERR_TIMEOUT && task && stopped && !deletes);
+    assert(h2h_audio_start()==ESP_ERR_INVALID_STATE);
+    drive_stop=true;
+    assert(h2h_audio_stop()==ESP_OK && !task && !stopped && deletes==1 && deinits==1 && sem_deletes==1);
+    assert(h2h_audio_stop()==ESP_OK && deletes==1);
+    task_fail=true;assert(h2h_audio_start()==ESP_ERR_NO_MEM && !task && !stopped && sem_deletes==2);
+    task_fail=false;assert(h2h_audio_start()==ESP_OK);assert(h2h_audio_stop()==ESP_OK && deletes==2 && deinits==2);
     puts("H2H audio worker: PCM trim, pause, seek/pre-roll, paused seek, restart and fault recovery PASS");
 }

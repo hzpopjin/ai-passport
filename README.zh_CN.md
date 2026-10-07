@@ -1,21 +1,27 @@
 **简体中文** · [English](README.md)
 
-# H2H Pocket — IAN 版
+# AI Passport 上的 Pocket
 
-一个 ESP32-C3 AI 通行证应用，包含像素小屋、音乐播放、接柠檬游戏、收藏卡和粉丝徽章。可选的随机舞蹈账号绑定提供蓝牙配网、二维码认领与卡片确认、官方外观包，以及 NFC 个人信息网页。
+一款运行在 FoloToy AI Passport 上的口袋伙伴：选择团体／成员版本，布置像素小房间，听音乐，玩接接乐和记忆游戏，收集小卡，并展示应援牌。
 
-本仓库是 [FoloToy/ai-passport](https://github.com/FoloToy/ai-passport) 的 fork。应用开发位于 `feature/h2h-pocket`，`main` 保留上游基线。此次源码交接是开发快照，实体设备与账号联调验收仍待完成。
+**团体属于可选内容。** STAYC 是一个示例，先前还有 H2H／IAN 版本。成员图片、歌曲和衣装随安装版本而定。当前分支编译 STAYC 示例，尚未实现任意团体的运行时切换。
 
-请先阅读 [AGENTS.md](AGENTS.md)、[应用说明](docs/assets/h2h-pocket.zh_CN.md)和 [agent 接手文档](docs/assets/h2h-agent-handoff.zh_CN.md)。接手文档说明实现位置、外部客户端集成、验证要求与剩余工作。
+当前应用位于 **`feature/stayc-paired-firmware`** 分支，`main` 保留上游硬件测试基线。本分支是**源码开发快照**，尚不是可直接刷写的公开版本：歌曲录音、提供的图片、参考 JS／WASM、记录的参考运行轨迹以及五组移植玩法模块，因再分发授权尚未明确而排除。全新克隆不能完成 STAYC 构建或完整主机测试；带本地材料的验证通过，也不等于公开源码可独立构建。
+
+- **已有设备，想了解使用方法：**阅读 [Pocket 使用指南](docs/assets/pocket.zh_CN.md)，了解激活、按键、存档和故障处理。
+- **想构建或参与开发：**阅读[开发指南](docs/assets/stayc-development.zh_CN.md)、[开源前检查](docs/contribution/open-source-review.zh_CN.md)和 [AGENTS.md](AGENTS.md)。
+- **版权声明：**相关版权内容仅供个人学习、研究，禁止商用。请阅读[版权与素材声明](docs/assets/copyright-notice.zh_CN.md)。该声明不授予第三方内容的传播许可；[MIT](LICENSE) 覆盖的源码继续遵循原许可。
 
 ```sh
-git clone --branch feature/h2h-pocket https://github.com/hzpopjin/ai-passport.git
+git clone --branch feature/stayc-paired-firmware https://github.com/hzpopjin/ai-passport.git
 cd ai-passport
-python3 tools/h2h/preview.py
+python3 tools/check_repo.py
 ```
 
-打开 <http://127.0.0.1:8877>，使用页面按钮或方向键、回车键操作，Escape 返回。本地预览支持导航与布局检查；账户画面不模拟真实 SSO、蓝牙或 NFC。
+仓库检查验证公开文档和仓库规范。固件开发需要 **ESP-IDF 5.5.3**、**ESP32-C3**、**8 MiB Flash**、**无 PSRAM**，以及开发指南所列、另行获得授权的本地输入。本仓库不发布固件镜像或私有素材包。
 
-个人音乐录音未纳入 Git 和源码包。没有这些资源仍可运行视觉预览；播放、资源完整性测试和固件构建需要匹配的本地音频。按[接手文档](docs/assets/h2h-agent-handoff.zh_CN.md#完整验证前恢复本地音乐)恢复或重新生成。构建使用 ESP-IDF **5.5.3**，目标为 **8 MB Flash、无 PSRAM 的 ESP32-C3**。构建通过不代表设备行为已验收。
+默认构建通过手机蓝牙完成激活与同步。账号登录令牌保留在手机，卡片不接收该令牌，也不直接访问后端。兼容的手机客户端及后端服务需要另行准备。外部外观包、头像存储和循环日志需要经过评审的候选分区；默认分区不提供这些容量。
 
-账号与后端变更已准备供审查，本快照不部署它们或发布小程序。三套官方外观包选择固件内已有的服装与背景；固件重刷和任意主题上传仍需后续开发。
+[旧版 H2H／IAN 指南](docs/assets/h2h-pocket.zh_CN.md)及其[桌面预览](docs/assets/h2h-pocket.zh_CN.md#桌面预览)描述的是先前应用。预览可在没有音乐时查看旧界面，但不模拟当前 STAYC 固件或真实账号激活。
+
+基于 [FoloToy/ai-passport](https://github.com/FoloToy/ai-passport)。可复现问题请提交至 [GitHub Issues](https://github.com/hzpopjin/ai-passport/issues)；敏感问题遵循[安全政策](.github/SECURITY.zh_CN.md)。请勿附上登录令牌、完整激活二维码链接、Wi-Fi 密码、私钥或原始设备日志。

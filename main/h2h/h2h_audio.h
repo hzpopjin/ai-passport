@@ -9,6 +9,9 @@ typedef struct {
     uint32_t position_ms;
     bool playing, ended, failed;
 } h2h_audio_status_t;
+/* Start lazily for authorized playback. Stop is bounded and worker-owned;
+ * timeout retains all live handles for a later retry. Main-task calls only. */
 esp_err_t h2h_audio_start(void);
+esp_err_t h2h_audio_stop(void);
 void h2h_audio_request(const h2h_audio_request_t *request);
 h2h_audio_status_t h2h_audio_status(void);

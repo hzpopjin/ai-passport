@@ -31,6 +31,24 @@ idf.py flash monitor          # optional incremental application flash
 idf.py fullclean              # remove stale generated build state only
 ```
 
+When the requested firmware must preserve the existing minimal NVS/PHY/factory
+layout and must not generate a padded image, use the explicit segmented mode:
+
+```sh
+./tools/validate.sh --all --segmented
+python3 tools/archive_segmented_firmware.py verify build/firmware-segmented/<app-sha256>
+```
+
+This mode retains the application, bootloader, partition table, complete generated
+`flash_args`/`flasher_args.json`, matching ELF/MAP and a hash manifest. It checks
+the exact default layout, 8 MiB image headers, at least 512 KiB application
+headroom, ELF identity, and erase-sector separation from NVS and PHY data.
+It creates no merged file and writes no device. The default gate still packages
+the merged image. Segmented mode intentionally rejects custom partitions or extra
+flash images; use the ordinary layout gate for those configurations.
+Choose the actual flash segments only after checking the existing device layout
+and bootloader compatibility under the [data policy](firmware-layout.md#flashing-and-stored-data).
+
 `idf.py fullclean` does not fully synchronize an existing `sdkconfig` with
 changed defaults. Preserve intentional local settings, then run
 `idf.py set-target esp32c3` when the target or tracked defaults must be
@@ -144,6 +162,15 @@ ADC failures, LVGL initialization locking/retry, and codec open/sleep/wake
 recovery. They need only a host C compiler and Python, not ESP-IDF or downloaded
 Managed Components. They do not establish real timing, electrical behavior or
 device compatibility; the firmware gate compiles against the pinned dependencies.
+
+The paired STAYC gate additionally runs the genuine v15 WASM/native gameplay
+traces, real browser JS/WASM player comparison, local extension codec/restore
+faults and the actual cloud/main integration against host SDK stubs. These need
+Node.js, Python, a host C compiler and OpenSSL development libraries. The cJSON
+test dependency is pinned by file SHA256; set command-scoped `H2H_CJSON_DIR` to
+an existing verified cJSON 1.7.19 directory to reuse it offline. Without that
+setting, the helper uses its local cache and official upstream download. This
+test dependency does not replace any firmware Managed Component.
 
 To run an individual pure-logic test:
 

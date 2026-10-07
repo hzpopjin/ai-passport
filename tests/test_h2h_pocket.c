@@ -38,12 +38,12 @@ int main(void) {
     sent=p.record; h2h_save_t newer=progress(7); assert(h2h_pocket_local_save(&p,1,&newer,write_record,NULL));
     old.save=local; assert(h2h_pocket_reply(&p,&sent,&old,write_record,NULL)); assert(p.record.dirty && p.record.save.hearts==7 && p.record.revision==1);
     sent=p.record; h2h_pocket_reply_t migration={.epoch=1,.account_id=7,.activated=true,.has_save=true,.revision=2,.save=progress(10),.restore_required=true};
-    assert(h2h_pocket_reply(&p,&sent,&migration,write_record,NULL)); assert(p.record.save.hearts==10 && p.record.recovery_save.hearts==7 && p.record.restore_ack);
-    newer=progress(11); assert(h2h_pocket_local_save(&p,1,&newer,write_record,NULL)); sent=p.record;
-    migration.restore_required=false; assert(h2h_pocket_reply(&p,&sent,&migration,write_record,NULL)); assert(!p.record.restore_ack && p.record.save.hearts==11 && p.record.dirty);
-    sent=p.record; migration.revision=3; migration.save=progress(12); migration.conflict=true;
-    assert(h2h_pocket_reply(&p,&sent,&migration,write_record,NULL)); assert(!h2h_pocket_can_play(&p));
-    assert(h2h_pocket_restore_cloud(&p,write_record,NULL)); assert(p.record.recovery_save.hearts==11 && p.record.save.hearts==12 && h2h_pocket_can_play(&p));
+    assert(h2h_pocket_reply(&p,&sent,&migration,write_record,NULL));
+    assert(p.record.conflict && p.record.save.hearts==7 && p.record.remote_save.hearts==10 && !p.record.restore_ack);
+    assert(!h2h_pocket_can_play(&p));
+    /* Protected conflict is preserved across reboot, with both snapshots. */
+    h2h_pocket_init(&reboot,2,1);assert(h2h_pocket_decode(&reboot,disk,sizeof(disk)));
+    assert(reboot.record.conflict&&reboot.record.save.hearts==7&&reboot.record.remote_save.hearts==10);
     sent=p.record; h2h_pocket_reply_t recovered={.epoch=5,.account_id=9,.activated=true,.has_save=true,.revision=10,.save=progress(15)};
     assert(h2h_pocket_reply(&p,&sent,&recovered,write_record,NULL));
     assert(p.record.save.hearts==15 && p.record.revision==10 && !p.record.dirty && !p.record.recovery);

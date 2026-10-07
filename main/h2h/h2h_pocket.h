@@ -39,3 +39,14 @@ bool h2h_pocket_reply(h2h_pocket_t *p, const h2h_pocket_record_t *sent,
                       const h2h_pocket_reply_t *reply, h2h_pocket_write_fn write, void *ctx);
 /* Explicit card action after displaying cloud/local conflict. Preserve old local save. */
 bool h2h_pocket_restore_cloud(h2h_pocket_t *p, h2h_pocket_write_fn write, void *ctx);
+
+/* Upload an owned default snapshot before claiming an authoritative revision. */
+bool h2h_pocket_require_upload(h2h_pocket_t *p,h2h_pocket_write_fn write,void *ctx);
+
+/* Preserve the old epoch/save while an old actor learns that ownership changed. */
+bool h2h_pocket_lock_owner(h2h_pocket_t *p,h2h_pocket_write_fn write,void *ctx);
+/* Settle only the immutable pending proof; a minimal receipt cannot assign the
+ * current server owner/epoch. Preserve newer-period data and keep it locked. */
+bool h2h_pocket_settle_unbind(h2h_pocket_t *p,const h2h_pocket_record_t *sent,
+                            uint64_t authority_epoch,const char *operation,
+                            h2h_pocket_write_fn write,void *ctx);

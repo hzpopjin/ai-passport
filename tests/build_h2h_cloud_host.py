@@ -30,11 +30,15 @@ def build(output, dependency_dir):
         if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
             raise RuntimeError(f"Existing cJSON integrity mismatch: {target}")
     subprocess.run([
-        os.environ.get("CC", "cc"), "-std=c11", "-Wall", "-Wextra", "-Werror", "-DCONFIG_ESP_MAIN_TASK_STACK_SIZE=12288",
+        os.environ.get("CC", "cc"), "-std=c11", "-Wall", "-Wextra", "-Werror", "-DCONFIG_ESP_MAIN_TASK_STACK_SIZE=12288", "-DH2H_CLOUD_HOST_LEGACY_TEST=1",
         "-Itests/pocket_stubs", "-Icomponents/pocket_crypto", f"-I{dependency_dir}", "-Imain/h2h",
-        "tests/test_h2h_cloud_host.c", "main/h2h/h2h_pocket.c",
-        "main/h2h/h2h_ownership.c", "main/h2h/h2h_model.c",
-        "main/h2h/h2h_resource.c", "main/h2h/h2h_resource_runtime.c",
+        "tests/test_h2h_cloud_host.c", "tests/pocket_log_main_stubs.c", "main/h2h/h2h_pocket.c",
+        "main/h2h/h2h_ownership.c", "main/h2h/h2h_fullsave.c", "main/h2h/h2h_relay.c", "main/h2h/h2h_model.c", "main/h2h/h2h_setup.c",
+        "main/h2h/stayc_scene.c", "assets/images/stayc/actions.c", "assets/images/stayc/sprites.c",
+        "main/h2h/stayc_game.c", "main/h2h/stayc_game_motion.c", "main/h2h/stayc_game_life.c",
+        "main/h2h/stayc_game_reaction.c", "main/h2h/stayc_game_decor.c", "main/h2h/stayc_game_store.c",
+        "main/h2h/stayc_game_player.c",
+        "main/h2h/h2h_resource.c", "main/h2h/h2h_resource_protocol.c", "main/h2h/h2h_resource_tls.c", "main/h2h/h2h_resource_runtime.c",
         "components/pocket_crypto/monocypher.c", "components/pocket_crypto/monocypher-ed25519.c",
         str(dependency_dir / "cJSON.c"), "-lcrypto", "-lm", "-o", str(output),
     ], cwd=ROOT, check=True)

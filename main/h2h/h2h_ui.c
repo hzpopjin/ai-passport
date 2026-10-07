@@ -1,13 +1,15 @@
 #include "h2h_ui.h"
 #include "h2h_motion.h"
 #include "h2h_tracks.h"
+#include "h2h_setup.h"
+#include "h2h_header.h"
+#include "stayc_visual.h"
 #include "lvgl.h"
 #include "src/misc/cache/instance/lv_image_cache.h"
 #include <stdio.h>
 #include <string.h>
 
 LV_FONT_DECLARE(h2h_font_16);
-extern const lv_image_dsc_t *const h2h_sprites[3][5];
 extern const lv_image_dsc_t *const h2h_icons[4];
 #define CREAM 0xFFFCF2
 #define INK 0x26466B
@@ -15,17 +17,38 @@ extern const lv_image_dsc_t *const h2h_icons[4];
 #define BLUE 0x80BBE6
 #define PINK 0xF7CDD9
 #define LEMON 0xFFEA8A
-static const char *home_names[] = {"IAN 小房间","随身听","柠檬接接乐","收藏册","应援牌","设置"};
+static const char *home_names[] = {"STAYC 小房间","随身听","星星接接乐","收藏册","应援牌","设置"};
 static const char *card_names[] = {"初见晴空","柠檬心事","海风来信","比心时刻","粉色舞台","夏日星光","一起跳舞","心动满格"};
 static const char *modes[] = {"顺序循环","随机播放","单曲循环"};
-static const char *outfits[] = {"晴空水手服","柠檬针织衫","粉色舞台装"};
-static const char *rooms[] = {"晴空小屋","柠檬花园","心动舞台"};
-static lv_obj_t *screen, *title, *status, *hint, *sprite, *detail, *progress, *progress_text;
+static const char *outfits[] = {"初始造型","运动短裤套装"};
+static const char *rooms[] = {"汽水小屋","薄荷天台","糖果舞台"};
+static const stayc_control_t *visuals;
+static lv_obj_t *props;
+static lv_obj_t *screen, *title, *hint, *sprite, *detail, *progress, *progress_text;
+static h2h_header_t header;
 static lv_obj_t *rows[10], *row_text[10], *falling[6], *basket, *toast, *hearts[4], *gesture_hearts[3];
 static int old_page = -1;
+static const pocket_profile_view_t *profile_view;
+static uint64_t profile_revision;
+static bool profile_available,profile_enabled;
+static lv_image_dsc_t profile_image;
+void h2h_ui_profile(const pocket_profile_view_t *view){
+    bool available=view&&view->available,enabled=view&&view->enabled;
+    uint64_t revision=available?view->revision:0;
+    if(profile_available!=available||profile_enabled!=enabled||profile_revision!=revision){lv_image_cache_drop(&profile_image);old_page=-1;}
+    profile_view=view;profile_available=available;profile_enabled=enabled;profile_revision=revision;
+}
+static bool setup_diagnostics, setup_confirm_debug, clean_setup;
+static int setup_ble_error;
+static bool setup_local_waiting;
+void h2h_ui_setup_state(bool diagnostics, bool confirm_debug, int ble_error, bool local_waiting) {
+    if(setup_diagnostics!=diagnostics || setup_confirm_debug!=confirm_debug || setup_ble_error!=ble_error || setup_local_waiting!=local_waiting) old_page=-1;
+    setup_diagnostics=diagnostics; setup_confirm_debug=confirm_debug; setup_ble_error=ble_error;
+    setup_local_waiting=local_waiting;
+}
+void h2h_ui_reset(void) { old_page=-1;screen=NULL; }
 static unsigned old_selection = 999, old_room = 999, old_cards = 999, old_track = 999;
 static int sprite_x,sprite_y;
-static unsigned last_pose = 999, last_outfit = 999;
 static const unsigned char *resource_bytes;
 static uint32_t resource_generation;
 static h2h_resource_labels_t resource_labels;
@@ -45,7 +68,6 @@ void h2h_ui_resources(const h2h_resource_view_t *view) {
     for(unsigned i=0;i<4;i++)resource_icons[i]=(lv_image_dsc_t){.header={.magic=LV_IMAGE_HEADER_MAGIC,.cf=LV_COLOR_FORMAT_RGB565A8,.w=16,.h=16,.stride=32},
         .data_size=768,.data=bytes+512+15*15360+i*768};
 }
-static const lv_image_dsc_t *sprite_image(unsigned outfit,unsigned pose){return resource_bytes?&resource_sprites[outfit%3][pose%5]:h2h_sprites[outfit%3][pose%5];}
 static lv_obj_t *box(lv_obj_t *parent,int x,int y,int w,int h,uint32_t bg,int radius) {
     lv_obj_t *o=lv_obj_create(parent); lv_obj_remove_style_all(o);
     lv_obj_set_pos(o,x,y); lv_obj_set_size(o,w,h);
@@ -60,58 +82,106 @@ static lv_obj_t *text(lv_obj_t *parent,int x,int y,int w,const char *value,uint3
 }
 static void center_text(lv_obj_t *o) { lv_obj_set_style_text_align(o,LV_TEXT_ALIGN_CENTER,0); }
 static void room_decor(unsigned room) {
-    const uint32_t backgrounds[]={SKY,0xEBF3CE,0xF8E5EE};
-    box(screen,12,43,216,199,resource_bytes?resource_labels.room_colors[room%3]:backgrounds[room%3],18);
-    if(room==0) {
-        box(screen,154,58,54,58,0xFFFEF9,12); box(screen,159,63,44,48,0xBDE5F5,8);
-        box(screen,178,63,4,48,0xFFFEF9,0); box(screen,159,85,44,4,0xFFFEF9,0);
-        box(screen,29,170,26,32,0xF5B6CA,6); box(screen,34,151,16,26,0x9BCB9A,8);
-    } else if(room==1) {
-        box(screen,168,63,29,29,LEMON,14);
-        box(screen,30,178,177,25,0xB6D798,9);
-        for(int i=0;i<3;i++) { box(screen,33+i*70,150,4,35,0x79A967,0); box(screen,27+i*70,140,16,22,LEMON,6); }
-    } else {
-        box(screen,22,51,18,140,PINK,6); box(screen,200,51,18,140,PINK,6);
-        box(screen,36,195,170,12,0xD4B6E6,4); box(screen,26,207,188,12,0xB5CCE9,4);
-        for(int i=0;i<5;i++) box(screen,56+i*29,54,8,8,LEMON,4);
-    }
+    stayc_visual_room(screen,room,visuals->decor);
 }
 static void make_sprite(int x,int y,int scale) {
-    sprite=lv_image_create(screen); lv_obj_set_pos(sprite,x,y);
-    lv_image_set_src(sprite,sprite_image(0,0)); lv_image_set_scale(sprite,scale);
-    lv_image_set_antialias(sprite,false); sprite_x=x; sprite_y=y; last_pose=last_outfit=999;
+    (void)scale;
+    sprite=stayc_visual_actor(screen);props=stayc_visual_props(screen);
+    sprite_x=x-32;sprite_y=y-40;
 }
 static void make_row(int index,int y,const char *name,bool selected,bool locked) {
     rows[index]=box(screen,16,y,208,32,selected?LEMON:0xFFFFFF,10);
     row_text[index]=text(rows[index],10,6,190,name,locked?0x98A4AF:INK);
 }
 static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool ble_connected, int passkey) {
-    lv_obj_t *previous=screen;
+    lv_obj_t *previous=lv_screen_active();
     screen=lv_obj_create(NULL); lv_obj_remove_style_all(screen);
     lv_obj_set_size(screen,240,320); lv_obj_set_style_bg_color(screen,lv_color_hex(CREAM),0);
     lv_obj_set_style_bg_opa(screen,LV_OPA_COVER,0); lv_obj_remove_flag(screen,LV_OBJ_FLAG_SCROLLABLE);
     memset(rows,0,sizeof(rows)); memset(row_text,0,sizeof(row_text)); memset(falling,0,sizeof(falling));
-    sprite=detail=progress=progress_text=basket=NULL; memset(hearts,0,sizeof(hearts)); memset(gesture_hearts,0,sizeof(gesture_hearts));
-    title=text(screen,24,12,112,resource_bytes?resource_labels.group:"H2H POCKET",INK);
-    status=text(screen,130,12,87,"",INK); lv_obj_set_style_text_align(status,LV_TEXT_ALIGN_RIGHT,0);
+    sprite=props=detail=progress=progress_text=basket=NULL; memset(hearts,0,sizeof(hearts)); memset(gesture_hearts,0,sizeof(gesture_hearts));
+    clean_setup=m->page==H2H_ACCOUNT && (passkey>=0 || setup_local_waiting || (!m->play_allowed && !setup_diagnostics));
+    if(clean_setup) {
+        title=hint=toast=NULL;
+        if(passkey>=0) {
+            char pin[32];snprintf(pin,sizeof(pin),"BLE PIN %06d",passkey);
+            center_text(text(screen,20,79,200,"Pair this phone",INK));
+            center_text(text(screen,20,115,200,pin,INK));
+            center_text(text(screen,20,154,200,"Confirm on your phone",INK));
+        } else if(setup_local_waiting) {
+            center_text(text(screen,20,105,200,"Preparing local test",INK));
+            center_text(text(screen,20,145,200,"Hold OK to cancel",INK));
+        } else if(setup_confirm_debug) {
+            center_text(text(screen,20,92,200,"Open diagnostics?",INK));
+            center_text(text(screen,20,126,200,"OK: confirm / arrows: cancel",INK));
+        } else if(cloud && cloud->state==H2H_CLOUD_CLAIMED) {
+            center_text(text(screen,20,88,200,cloud->message,INK));
+            center_text(text(screen,20,126,200,"OK: confirm account",INK));
+        } else {
+            char entry[128];
+            const char *payload=cloud && cloud->pair_url[0]?cloud->pair_url:NULL;
+            if(!payload && h2h_setup_url(entry,sizeof(entry),cloud?cloud->device_id:NULL)) payload=entry;
+            if(payload) {
+                lv_obj_t *qr=lv_qrcode_create(screen);
+                lv_qrcode_set_size(qr,192); lv_qrcode_set_quiet_zone(qr,true);
+                lv_qrcode_set_dark_color(qr,lv_color_hex(INK));
+                lv_qrcode_set_light_color(qr,lv_color_hex(0xFFFFFF));
+                lv_obj_set_pos(qr,24,24);
+                if(lv_qrcode_update(qr,payload,strlen(payload))!=LV_RESULT_OK)
+                    center_text(text(screen,20,110,200,"QR unavailable",INK));
+            } else center_text(text(screen,20,110,200,"Setup unavailable",INK));
+        }
+        /* Approved future alias: deployment and the published guide destination
+         * remain prerequisites for claiming the phone setup works. */
+        lv_obj_t *guide=text(screen,10,251,220,"https://ai-passport.randomdance.cn/pocket/guide",INK);
+        lv_label_set_long_mode(guide,LV_LABEL_LONG_WRAP); center_text(guide);
+        lv_screen_load(screen); if(previous) lv_obj_delete(previous); return;
+    }
+    title=text(screen,24,12,112,"STAYC",INK);
+    h2h_header_create(&header,screen);
     hint=text(screen,20,286,200,"↑ ↓ 选择   ● 打开",INK); center_text(hint);
-    const char *name=resource_bytes?resource_labels.group:"H2H POCKET";
+    const char *name="STAYC";
     switch(m->page) {
     case H2H_HOME:
         room_decor(m->save.room); make_sprite(88,94,512);
         for(unsigned i=0;i<6;i++) box(screen,91+(int)i*10,231,5,5,i==m->selection?INK:BLUE,3);
         rows[0]=box(screen,16,244,208,34,LEMON,12);
         text(rows[0],8,7,16,"←",INK); text(rows[0],184,7,16,"→",INK);
-        center_text(text(rows[0],28,7,152,resource_bytes&&m->selection==0?resource_labels.title:home_names[m->selection],INK));
+        center_text(text(rows[0],28,7,152,home_names[m->selection],INK));
         break;
     case H2H_ROOM: {
-        name=resource_bytes?resource_labels.member:"IAN 小房间"; room_decor(m->save.room); make_sprite(88,94,512);
+        name=stayc_members[visuals->member];
+        if(visuals->view==STAYC_MEMBER_MENU) {
+            name="选择成员";
+            for(unsigned i=0;i<6;i++)make_row((int)i,47+(int)i*37,stayc_members[i],i==visuals->selection,false);
+            lv_label_set_text(hint,"● 选择   长按返回");break;
+        }
+        if(visuals->view==STAYC_ACTION_MENU) {
+            name="互动与生活";unsigned start=visuals->selection/5*5;
+            for(unsigned i=start;i<13&&i<start+5;i++)make_row((int)(i-start),62+(int)(i-start)*42,i==12?"房间装饰":stayc_action_label(i),i==visuals->selection,false);
+            lv_label_set_text(hint,"● 开始   长按返回");break;
+        }
+        if(visuals->view==STAYC_DECOR_MENU) {
+            name="房间装饰";room_decor(m->save.room);
+            const char *slots[]={"灯光","抱枕","盆栽","摆件"};char label[80];
+            for(unsigned i=0;i<4;i++){snprintf(label,sizeof(label),"%s %s",slots[i],stayc_decor_labels[i][(visuals->decor>>(i*2))&3u]);make_row((int)i,58+(int)i*49,label,i==visuals->selection,false);}
+            lv_label_set_text(hint,"● 更改   长按返回");break;
+        }
+        room_decor(m->save.room);
+        if(visuals->view==STAYC_ACTION_PLAYER) {
+            if(visuals->action==5||visuals->action==9){box(screen,52,184,116,29,0xb5d6e3,3);box(screen,57,207,106,12,0x9cc0d0,3);}
+            if(visuals->action==7){box(screen,198,87,2,131,INK,0);box(screen,181,88,32,22,CREAM,0);box(screen,190,112,15,3,0xd17d54,0);}
+            if(visuals->action==11){box(screen,12,174,216,68,0x91c59b,0);box(screen,28,209,188,21,0xb5d99d,0);box(screen,207,167,2,55,INK,0);box(screen,209,168,15,11,PINK,0);}
+            make_sprite(88,94,512);detail=text(screen,20,250,200,stayc_action_label(visuals->action),INK);center_text(detail);
+            lv_label_set_text(hint,"● 暂停   长按返回");break;
+        }
+        make_sprite(88,94,512);
+        const char *controls[]={"成员","互动","换装","房间"};
         for(int i=0;i<4;i++) {
             rows[i]=box(screen,16+i*54,246,46,34,m->selection==(unsigned)i?LEMON:SKY,10);
-            lv_obj_t *icon=lv_image_create(rows[i]); lv_image_set_src(icon,resource_bytes?&resource_icons[i]:h2h_icons[i]);
-            lv_obj_set_pos(icon,15,9); lv_image_set_scale(icon,512); lv_image_set_antialias(icon,false);
+            center_text(text(rows[i],3,8,40,controls[i],INK));
         }
-        if(m->selection>=2) { detail=text(screen,22,221,196,m->selection==2?outfits[m->save.outfit]:rooms[m->save.room],INK); center_text(detail); }
+        if(m->selection>=2) { detail=text(screen,22,221,196,m->selection==2?outfits[m->save.outfit%2]:rooms[m->save.room],INK); center_text(detail); }
         lv_label_set_text(hint,"↑ ↓ 切换   ● 互动"); break;
     }
     case H2H_MUSIC: {
@@ -140,7 +210,7 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
         lv_label_set_text(hint,"▶ 播放   长按返回"); break;
     }
     case H2H_GAME:
-        name="柠檬接接乐"; box(screen,12,43,216,232,SKY,18);
+        name="星星接接乐"; box(screen,12,43,216,232,SKY,18);
         detail=text(screen,24,50,192,"",INK); center_text(detail);
         for(int i=0;i<5;i++) box(screen,27+i*40,79,2,165,0xC9E4F3,0);
         for(int i=0;i<6;i++) { falling[i]=text(screen,0,0,20,"●",LEMON); }
@@ -162,20 +232,20 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
             row_text[i]=text(rows[i],5,12,90,unlocked?card_names[i]:"等待心动",unlocked?INK:0x98A4AF); center_text(row_text[i]);
         }
         char outfit[48], room[48];
-        snprintf(outfit,sizeof(outfit),"服装 %lu/%u",(unsigned long)m->save.outfit+1,h2h_outfit_count(m));
-        snprintf(room,sizeof(room),"背景 %lu/%u",(unsigned long)m->save.room+1,h2h_room_count(m));
+        snprintf(outfit,sizeof(outfit),"服装 %lu/2",(unsigned long)(m->save.outfit%2)+1);
+        snprintf(room,sizeof(room),"背景 %lu/3",(unsigned long)m->save.room+1);
         for(int i=8;i<10;i++) { rows[i]=box(screen,16+(i-8)*108,253,100,27,m->selection==(unsigned)i?LEMON:SKY,8); center_text(text(rows[i],4,4,92,i==8?outfit:room,INK)); }
         lv_label_set_text(hint,"● 选择   长按返回"); break;
     }
     case H2H_CARD:
         name="心动收藏"; box(screen,18,44,204,226,m->selection%2?PINK:SKY,16);
         center_text(text(screen,29,55,182,card_names[m->selection],INK)); make_sprite(88,111,512);
-        text(screen,44,239,152,resource_bytes?resource_labels.member:"IAN / H2H",INK);
+        text(screen,44,239,152,stayc_members[visuals->member],INK);
         lv_label_set_text(hint,"♥ 设为应援牌"); break;
     case H2H_BADGE:
-        name=resource_bytes?resource_labels.member:"IAN 应援牌"; room_decor(m->save.room); make_sprite(88,113,512);
-        center_text(text(screen,22,51,196,resource_bytes?resource_labels.member:"I A N",INK));
-        detail=text(screen,20,251,200,m->save.badge_card<8?card_names[m->save.badge_card]:(resource_bytes?resource_labels.group:"HEARTS2HEARTS"),INK); center_text(detail);
+        name=stayc_members[visuals->member]; room_decor(m->save.room); make_sprite(88,113,512);
+        center_text(text(screen,22,51,196,stayc_members[visuals->member],INK));
+        detail=text(screen,20,251,200,m->save.badge_card<8?card_names[m->save.badge_card]:"STAYC",INK); center_text(detail);
         for(int i=0;i<4;i++) hearts[i]=text(screen,27+i*53,103+i*29,20,"♥",0xEAAFCA);
         lv_label_set_text(hint,"长按确定返回"); break;
     case H2H_SETTINGS: {
@@ -183,14 +253,16 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
         char volume[64], countdown[64], mode[80]; snprintf(volume,sizeof(volume),"音量  %lu%%",(unsigned long)m->save.volume);
         snprintf(countdown,sizeof(countdown),"倒计时  %s",m->save.countdown&1u?"开":"关");
         snprintf(mode,sizeof(mode),"模式  %s",modes[m->save.mode]);
-        const char *labels[]={volume,countdown,mode,"AI PASSPORT"};
+        const char *labels[]={volume,countdown,mode,"用户信息"};
         for(int i=0;i<4;i++) make_row(i,58+i*48,labels[i],m->selection==(unsigned)i,false);
         lv_label_set_text(hint,"● 更改   长按返回"); break;
     }
     case H2H_ACCOUNT: {
-        name="AI PASSPORT";
+        name="用户信息";
         char line[90];
-        snprintf(line,sizeof(line),"%s",cloud ? cloud->message : "Starting");
+        if(setup_ble_error) snprintf(line,sizeof(line),"BLE init error %d; OK retries",setup_ble_error);
+        else if(cloud&&cloud->bound&&profile_available)snprintf(line,sizeof(line),"上次手机同步的资料");
+        else snprintf(line,sizeof(line),"%s",cloud ? cloud->message : "Starting");
         center_text(text(screen,20,45,200,line,INK));
         if (cloud && cloud->pair_url[0]) {
             lv_obj_t *qr=lv_qrcode_create(screen);
@@ -202,8 +274,20 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
                 center_text(text(screen,20,188,200,"QR unavailable",INK));
         } else {
             box(screen,20,76,200,129,SKY,14);
-            center_text(text(screen,29,101,182,cloud && cloud->bound ? "ACCOUNT LINKED" : "CONNECT PHONE BY BLE",INK));
-            if (cloud && cloud->device_id[0]) {
+            if(cloud&&cloud->bound&&profile_available&&profile_view){
+                name="用户信息";
+                memset(&profile_image,0,sizeof(profile_image));profile_image.header.magic=LV_IMAGE_HEADER_MAGIC;
+                profile_image.header.cf=LV_COLOR_FORMAT_RGB565;profile_image.header.w=64;profile_image.header.h=64;profile_image.header.stride=128;
+                profile_image.data_size=POCKET_PROFILE_BYTES;profile_image.data=profile_view->pixels;
+                lv_obj_t *image=lv_image_create(screen);lv_obj_set_pos(image,29,80);lv_image_set_src(image,&profile_image);
+                lv_obj_t *username=text(screen,102,87,108,profile_view->meta.username,INK);
+                lv_obj_set_height(username,48);
+                snprintf(line,sizeof(line),"UID %s",profile_view->meta.uid);center_text(text(screen,29,149,182,line,INK));
+                if(profile_view->meta.points_available)snprintf(line,sizeof(line),"上次积分 %lu",(unsigned long)profile_view->meta.points);
+                else snprintf(line,sizeof(line),"账户积分 暂不可用");
+                center_text(text(screen,29,176,182,line,INK));
+            }else center_text(text(screen,29,101,182,cloud&&cloud->bound?(profile_enabled?"等待手机同步资料":"资料存储待启用"):"CONNECT PHONE BY BLE",INK));
+            if ((!cloud||!cloud->bound||!profile_available) && cloud && cloud->device_id[0]) {
                 snprintf(line,sizeof(line),"RDP-%s",cloud->device_id+24);
                 center_text(text(screen,29,137,182,line,INK));
             }
@@ -212,12 +296,12 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
             snprintf(line,sizeof(line),"BLE PIN %06d",passkey);
             center_text(text(screen,18,207,204,line,INK));
         } else if (ble_connected) center_text(text(screen,18,207,204,"BLE CONNECTED",INK));
-        const char *actions[]={"Confirm","Sync","Forget","Unbind","Restore"};
-        for(int i=0;i<5;i++) {
+        const char *actions[]={"Confirm","Sync","Forget","Unbind","Status","Local"};
+        for(int i=0;i<(setup_diagnostics?6:5);i++) {
             rows[i]=box(screen,9+(i%3)*75,225+(i/3)*30,71,28,m->selection==(unsigned)i?LEMON:SKY,8);
             center_text(text(rows[i],2,7,67,actions[i],INK));
         }
-        lv_label_set_text(hint,m->activation_required && !m->play_allowed?"Activation required":"Hold OK to return");
+        lv_label_set_text(hint,m->selection==4?"Auto sync; conflict protected":m->activation_required && !m->play_allowed?"Activation required":"Hold OK to return");
         break;
     }
     }
@@ -229,33 +313,36 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
     lv_screen_load(screen); if(previous) lv_obj_delete(previous);
 }
 void h2h_ui_render(const h2h_model_t *m,unsigned position,bool playing,int battery,bool storage_ok,bool input_ok,unsigned ticks,
-                   const h2h_cloud_status_t *cloud,bool ble_connected,int passkey) {
+                   const h2h_cloud_status_t *cloud,bool ble_connected,int passkey,const stayc_control_t *control) {
+    visuals=control;
+    static unsigned old_view=999,old_visual_selection=999,old_member=999,old_decor=999;
     static unsigned last_volume=999,last_mode=999,last_countdown=999,last_outfit_value=999;
     static h2h_cloud_status_t last_cloud;
     static bool last_ble_connected;
     static int last_passkey=-2;
-    bool rebuild=(int)m->page!=old_page || m->selection!=old_selection || m->save.room!=old_room || m->save.cards!=old_cards || m->track!=old_track;
+    bool rebuild=!screen || lv_screen_active()!=screen || (int)m->page!=old_page || m->selection!=old_selection || m->save.room!=old_room || m->save.cards!=old_cards || m->track!=old_track;
+    if(old_view!=visuals->view||old_visual_selection!=visuals->selection||old_member!=visuals->member||old_decor!=visuals->decor)rebuild=true;
     if ((m->page==H2H_SETTINGS || m->page==H2H_MUSIC) && (last_volume!=m->save.volume || last_mode!=m->save.mode || last_countdown!=m->save.countdown)) rebuild=true;
     if((m->page==H2H_ROOM || m->page==H2H_COLLECTION) && last_outfit_value!=m->save.outfit) rebuild=true;
     if(m->page==H2H_ACCOUNT && (memcmp(&last_cloud,cloud,sizeof(last_cloud)) ||
         last_ble_connected!=ble_connected || last_passkey!=passkey)) rebuild=true;
     if(rebuild) build(m,cloud,ble_connected,passkey);
+    old_view=visuals->view;old_visual_selection=visuals->selection;old_member=visuals->member;old_decor=visuals->decor;
     if(cloud) last_cloud=*cloud;
     last_ble_connected=ble_connected; last_passkey=passkey;
     old_page=m->page; old_selection=m->selection; old_room=m->save.room; old_cards=m->save.cards; old_track=m->track;
     last_volume=m->save.volume; last_mode=m->save.mode; last_countdown=m->save.countdown; last_outfit_value=m->save.outfit;
     char line[100];
-    if(battery<0) snprintf(line,sizeof(line),"♥%lu  --",(unsigned long)m->save.hearts);
-    else snprintf(line,sizeof(line),"♥%lu %d%%",(unsigned long)m->save.hearts,battery);
-    lv_label_set_text(status,line);
+    if(clean_setup) return;
+    h2h_header_update(&header,title,m->save.hearts,battery,false,ble_connected);
     if(sprite) {
         h2h_motion_t motion=h2h_motion(m,playing);
-        unsigned pose=motion.pose;
-        unsigned outfit=m->save.outfit;
-        if(m->page==H2H_CARD) { pose=m->selection%5; outfit=m->selection%3; }
-        if(m->page==H2H_BADGE && m->save.badge_card<8) { outfit=m->save.badge_card%3; if(!playing) pose=m->save.badge_card%5; }
-        if(pose!=last_pose || outfit!=last_outfit) { lv_image_set_src(sprite,sprite_image(outfit,pose)); last_pose=pose; last_outfit=outfit; }
-        lv_obj_set_pos(sprite,sprite_x+motion.dx,sprite_y+motion.dy);
+        stayc_frame_t frame={.pose=motion.pose,.x=sprite_x+motion.dx,.y=sprite_y+motion.dy,.scale_q8=512};unsigned action=99;
+        if(m->page==H2H_CARD)frame.pose=stayc_reaction_pose(m->selection,m->animation_ms);
+        if(m->page==H2H_BADGE&&m->save.badge_card<8&&!playing)frame.pose=stayc_reaction_pose(m->save.badge_card,m->animation_ms);
+        if(visuals->view==STAYC_ACTION_PLAYER){action=visuals->action;stayc_sample(visuals->member,m->save.outfit%2,action,visuals->elapsed,&frame);
+            lv_label_set_text(hint,frame.done?"● 重播   长按返回":visuals->paused?"● 继续   长按返回":"● 暂停   长按返回");}
+        if(!stayc_visual_update(sprite,props,visuals->member,m->save.outfit%2,action,&frame))lv_label_set_text(hint,"角色资源校验失败");
         for(int i=0;i<3;i++) if(gesture_hearts[i]) {
             if(motion.hearts) { lv_obj_remove_flag(gesture_hearts[i],LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(gesture_hearts[i],112+i*14-(int)((m->animation_ms/60+(unsigned)i*7)%24)); }
             else lv_obj_add_flag(gesture_hearts[i],LV_OBJ_FLAG_HIDDEN);

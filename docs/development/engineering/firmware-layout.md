@@ -78,3 +78,13 @@ and flash targets that do not overwrite those data regions. `idf.py erase-flash`
 erases all user data. Do not add it as a routine prerequisite: use it only when
 a complete erase is explicitly intended and any data that must be kept has
 been saved.
+
+For the unchanged minimal layout, `./tools/validate.sh --all --segmented`
+retains verified segments under `build/firmware-segmented/<app-sha256>/` without
+generating the padded image. Its manifest binds all segment hashes, offsets,
+sector ranges and the matching ELF. `flash_args` lists every generated segment;
+it is not a requirement to rewrite the bootloader and partition table during an
+application update. An app-only write starts at `0x10000` and is appropriate only
+after the existing partition table and bootloader are confirmed compatible.
+Separate image ranges do not erase NVS/PHY; the application may still save normal
+runtime state to NVS. This packaging command does not authorize a device write.

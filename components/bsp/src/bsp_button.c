@@ -8,6 +8,7 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
 
 static const char *TAG = "bsp_btn";
 
@@ -36,32 +37,50 @@ static bsp_adc_button_t s_drivers[BSP_BTN_COUNT];
 static int64_t s_sample_time;
 static int s_sample_mv = -1;
 static bool s_sample_valid;
+static int s_sample_key=-2;
+static int64_t s_changed_time;
+static uint64_t s_sample_sequence;
+static portMUX_TYPE s_sample_mux = portMUX_INITIALIZER_UNLOCKED;
+static int key_from_mv(int mv){
+    if(mv<0)return -2;
+    for(unsigned i=0;i<BSP_BTN_COUNT;i++)if(mv>=BTN_MV[i][0]&&mv<BTN_MV[i][1])return (int)i;
+    return -1;
+}
 
 static uint8_t button_level(button_driver_t *driver) {
     if (!s_ready) return BUTTON_INACTIVE;
     const bsp_adc_button_t *button = (const bsp_adc_button_t *)driver;
     const int64_t now = esp_timer_get_time();
+    portENTER_CRITICAL(&s_sample_mux);
+    const bool refresh = !s_sample_valid || now - s_sample_time >= 1000;
+    int mv = s_sample_mv;
+    portEXIT_CRITICAL(&s_sample_mux);
     // Share one averaged reading across the three keys in a polling cycle.
-    if (!s_sample_valid || now - s_sample_time >= 1000) {
-        int sum = 0;
-        s_sample_time = now;
-        s_sample_valid = true;
-        s_sample_mv = -1;
+    if (refresh) {
+        int sum = 0; bool valid = true;
         for (int i = 0; i < CONFIG_ADC_BUTTON_SAMPLE_TIMES; ++i) {
             int raw;
             if (adc_oneshot_read(s_adc, BSP_BTN_ADC_CHANNEL, &raw) != ESP_OK) {
-                return BUTTON_INACTIVE;
+                valid = false; break;
             }
             sum += raw;
         }
-        if (adc_cali_raw_to_voltage(s_cali, sum / CONFIG_ADC_BUTTON_SAMPLE_TIMES,
-                                   &s_sample_mv) != ESP_OK) {
-            s_sample_mv = -1;
+        if (!valid || adc_cali_raw_to_voltage(s_cali, sum / CONFIG_ADC_BUTTON_SAMPLE_TIMES,
+                                             &mv) != ESP_OK) mv = -1;
+        /* Publish only the finished result. ADC work stays outside the lock;
+         * the app consumes this same sample instead of competing for ADC1. */
+        portENTER_CRITICAL(&s_sample_mux);
+        int decoded=key_from_mv(mv);
+        if(!s_sample_sequence||decoded!=s_sample_key){
+            if(s_sample_sequence!=UINT64_MAX)++s_sample_sequence;
+            s_sample_key=decoded;s_changed_time=now;
         }
+        s_sample_time = now; s_sample_mv = mv; s_sample_valid = true;
+        portEXIT_CRITICAL(&s_sample_mux);
     }
     // Half-open windows prevent two keys from matching a shared boundary.
-    return s_sample_mv >= BTN_MV[button->index][0] &&
-           s_sample_mv < BTN_MV[button->index][1] ? BUTTON_ACTIVE : BUTTON_INACTIVE;
+    return mv >= BTN_MV[button->index][0] &&
+           mv < BTN_MV[button->index][1] ? BUTTON_ACTIVE : BUTTON_INACTIVE;
 }
 
 static esp_err_t button_driver_delete(button_driver_t *driver) {
@@ -87,7 +106,10 @@ static void button_cleanup(void) {
     s_cb = NULL;
     s_user = NULL;
     s_ready = false;
+    portENTER_CRITICAL(&s_sample_mux);
     s_sample_valid = false;
+    s_sample_sequence=0;s_sample_key=-2;
+    portEXIT_CRITICAL(&s_sample_mux);
 
     for (int i = BSP_BTN_COUNT - 1; i >= 0; i--) {
         if (!s_btn[i]) continue;
@@ -208,9 +230,24 @@ esp_err_t bsp_button_init(bsp_btn_cb_t cb, void *user) {
     return ESP_OK;
 }
 
+bool bsp_button_snapshot(bsp_button_snapshot_t *out){
+    if(!out)return false;
+    const int64_t now=esp_timer_get_time();
+    portENTER_CRITICAL(&s_sample_mux);
+    bool valid=s_ready&&s_sample_valid&&s_sample_key>=-1&&s_sample_sequence>0&&s_sample_sequence<UINT64_MAX&&
+        now>=s_sample_time&&now-s_sample_time<=100000;
+    *out=(bsp_button_snapshot_t){.key=valid?s_sample_key:-2,.sampled_us=s_sample_time,.changed_us=s_changed_time,.sequence=s_sample_sequence};
+    portEXIT_CRITICAL(&s_sample_mux);
+    return valid;
+}
+int bsp_button_read_key(void) {
+    bsp_button_snapshot_t sample;return bsp_button_snapshot(&sample)?sample.key:-2;
+}
+
 int bsp_button_read_mv(void) {
     // 读的是 bsp_button_init() 建好、并与 iot_button 共用的那一路 ADC。
-    // 单次采样与组件的按键轮询互不干扰(oneshot 内部自带锁)。
+    // ADC oneshot uses a try-lock: a concurrent read can return a timeout.
+    // Gesture polling uses bsp_button_read_key() and does not start another read.
     if (!s_adc || !s_cali) return -1;
 
     int raw = 0, mv = 0;

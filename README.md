@@ -1,21 +1,27 @@
 [简体中文](README.zh_CN.md) · **English**
 
-# H2H Pocket — IAN edition
+# Pocket for AI Passport
 
-An ESP32-C3 AI Passport application with a pixel room, music playback, a lemon-catching game, collectible cards and a fan badge. Optional RandomDance account binding adds BLE Wi-Fi provisioning, QR approval, official appearance packs and an NFC profile webpage.
+A pocket companion for the FoloToy AI Passport: choose a group/member edition, decorate a pixel room, listen to music, play catch and memory games, collect cards, and display a fan badge.
 
-This repository is a fork of [FoloToy/ai-passport](https://github.com/FoloToy/ai-passport). Application development lives on `feature/h2h-pocket`; `main` retains the upstream baseline. The source handoff is a development snapshot, with physical device and account integration acceptance still pending.
+**Groups are optional content.** STAYC is one example; the earlier H2H/IAN edition is another. Member artwork, songs and outfits depend on the installed edition. The current branch compiles the STAYC example; arbitrary runtime group switching is not implemented.
 
-Start with [AGENTS.md](AGENTS.md), the [application manual](docs/assets/h2h-pocket.md), and the [agent handoff](docs/assets/h2h-agent-handoff.md). The handoff identifies the implementation, external client integration, validation requirements and remaining work.
+This fork's current application is on **`feature/stayc-paired-firmware`**. `main` retains the upstream hardware-test baseline. This branch is a **source development snapshot**, not a ready-to-flash public release: recordings, supplied artwork, reference JS/WASM, recorded oracle traces, and five adapted gameplay modules are excluded while redistribution rights are unresolved. A clean clone cannot run the complete STAYC build or host gate. Local validation with those inputs does not validate a standalone public distribution.
+
+- **Using an existing device:** read the [Pocket user guide](docs/assets/pocket.md) for activation, controls, saving and troubleshooting.
+- **Building or contributing:** read the [development guide](docs/assets/stayc-development.md), [release-readiness review](docs/contribution/open-source-review.md) and [AGENTS.md](AGENTS.md).
+- **Copyright:** related copyright content is for personal learning and research only; commercial use is prohibited. Read the [copyright and material notice](docs/assets/copyright-notice.md). This does not grant permission to distribute third-party material. The source covered by [MIT](LICENSE) retains that license.
 
 ```sh
-git clone --branch feature/h2h-pocket https://github.com/hzpopjin/ai-passport.git
+git clone --branch feature/stayc-paired-firmware https://github.com/hzpopjin/ai-passport.git
 cd ai-passport
-python3 tools/h2h/preview.py
+python3 tools/check_repo.py
 ```
 
-Open <http://127.0.0.1:8877> and use the buttons or arrow keys/Enter; Escape returns. The local preview supports navigation and layout inspection. Its account screen does not emulate real SSO, BLE or NFC.
+The repository check validates public documentation and repository conventions. Firmware development requires **ESP-IDF 5.5.3**, **ESP32-C3**, **8 MiB Flash**, and **no PSRAM**, plus the separately authorized local inputs described in the development guide. No firmware image or private asset bundle is published here.
 
-Personal music recordings are excluded from Git and the source archive. The visual preview runs without them, but playback, asset integrity tests and firmware builds require the matching local audio resources. Restore or regenerate them as explained in the [handoff](docs/assets/h2h-agent-handoff.md#restore-local-music-before-the-complete-gate). Build with ESP-IDF **5.5.3**, targeting ESP32-C3 with **8 MB Flash and no PSRAM**. A successful build does not prove device behavior.
+The default build uses phone-assisted activation and synchronization over Bluetooth. The phone holds the account login token; the card does not receive it or contact the backend directly. Compatible phone clients and backend services are separate prerequisites. External appearance packs, avatar storage and circular logs require reviewed candidate layouts; the default partition table has no such capacity.
 
-Account/backend changes are staged for review; this snapshot does not deploy them or publish the MiniApp. The three official packs select embedded outfits/backgrounds. Firmware rewriting and arbitrary theme uploads remain future development.
+The [earlier H2H/IAN guide](docs/assets/h2h-pocket.md) and [desktop preview](docs/assets/h2h-pocket.md#desktop-preview) describe the older application. The preview can inspect that interface without music, but does not emulate the current STAYC firmware or real account activation.
+
+Based on [FoloToy/ai-passport](https://github.com/FoloToy/ai-passport). Report reproducible problems through [GitHub Issues](https://github.com/hzpopjin/ai-passport/issues); follow the [security policy](.github/SECURITY.md) for sensitive reports. Never attach login tokens, full activation QR links, Wi-Fi passwords, private keys or raw device logs.

@@ -15,6 +15,23 @@ managed_components/
 # Personal listening resources are regenerated locally, not redistributed.
 /assets/music/h2h/*.ogg
 /assets/music/h2h/*.bin
+/assets/music/stayc/*.ogg
+/assets/music/stayc/*.bin
+
+# Rights review pending: retain these supplied/derived materials locally.
+/assets/images/stayc/
+/tools/h2h/reference/v15/
+/tests/stayc_v15_*.json
+/main/h2h/stayc_game.c
+/main/h2h/stayc_game.h
+/main/h2h/stayc_game_motion.c
+/main/h2h/stayc_game_motion.h
+/main/h2h/stayc_game_life.c
+/main/h2h/stayc_game_life.h
+/main/h2h/stayc_game_decor.c
+/main/h2h/stayc_game_decor.h
+/main/h2h/stayc_game_reaction.c
+/main/h2h/stayc_game_reaction.h
 
 __pycache__/
 .DS_Store

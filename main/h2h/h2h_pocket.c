@@ -102,7 +102,10 @@ bool h2h_pocket_reply(h2h_pocket_t *p, const h2h_pocket_record_t *sent, const h2
         if(r->has_save && (r->revision<next.revision || !r->revision || !valid_save(p,&r->save))) return false;
         if(r->restore_required && r->has_save) {
             if(r->revision<next.revision) return false;
-            if(!(next.restore_ack && r->revision==next.revision && memcmp(&next.save,&r->save,sizeof(r->save))==0)) {
+            if(next.dirty && memcmp(&next.save,&r->save,sizeof(r->save))!=0) {
+                /* An automatic reconnect never replaces unsent progress. */
+                next.conflict=true;next.remote_save=r->save;next.remote_revision=r->revision;
+            } else if(!(next.restore_ack && r->revision==next.revision && memcmp(&next.save,&r->save,sizeof(r->save))==0)) {
                 if(next.dirty) { next.recovery_save=next.save; next.recovery=true; }
                 next.save=r->save; next.revision=r->revision; next.remote_save=r->save; next.remote_revision=r->revision;
                 next.dirty=false; next.conflict=false; next.restore_ack=true; changed=true;
@@ -121,6 +124,8 @@ bool h2h_pocket_reply(h2h_pocket_t *p, const h2h_pocket_record_t *sent, const h2
             else { next.conflict=true; next.remote_save=r->save; next.remote_revision=r->revision; }
         } else if(next.restore_ack) return false;
     }
+    if(r->activated && r->has_save && !next.ownership.pending_unbind[0])
+        (void)h2h_ownership_reset_done(&next.ownership,r->epoch);
     return persist(p,&next,changed,write,ctx);
 }
 bool h2h_pocket_restore_cloud(h2h_pocket_t *p, h2h_pocket_write_fn write, void *ctx) {
@@ -128,4 +133,35 @@ bool h2h_pocket_restore_cloud(h2h_pocket_t *p, h2h_pocket_write_fn write, void *
     h2h_pocket_record_t next=p->record; next.recovery_save=next.save; next.recovery=true;
     next.save=next.remote_save; next.revision=next.remote_revision; next.dirty=false; next.conflict=false;
     return persist(p,&next,true,write,ctx);
+}
+
+bool h2h_pocket_require_upload(h2h_pocket_t *p,h2h_pocket_write_fn write,void *ctx) {
+    if(!h2h_pocket_can_play(p)||p->record.revision)return false;
+    h2h_pocket_record_t next=p->record;next.dirty=true;
+    return persist(p,&next,false,write,ctx);
+}
+
+bool h2h_pocket_lock_owner(h2h_pocket_t *p,h2h_pocket_write_fn write,void *ctx) {
+    if(!p->healthy)return false;
+    h2h_pocket_record_t next=p->record;next.ownership.activated=false;next.ownership.reset_required=true;
+    return persist(p,&next,false,write,ctx);
+}
+bool h2h_pocket_settle_unbind(h2h_pocket_t *p,const h2h_pocket_record_t *sent,
+                            uint64_t authority_epoch,const char *operation,
+                            h2h_pocket_write_fn write,void *ctx) {
+    if(!p->healthy || !sent || !operation || !sent->ownership.pending_unbind[0] ||
+       !valid_id(operation) || strcmp(operation,sent->ownership.pending_unbind) ||
+       sent->ownership.epoch!=p->record.ownership.epoch ||
+       sent->ownership.pending_epoch!=p->record.ownership.pending_epoch ||
+       strcmp(sent->ownership.pending_unbind,p->record.ownership.pending_unbind) ||
+       authority_epoch>H2H_POCKET_MAX_INTEGER || authority_epoch<sent->ownership.epoch ||
+       authority_epoch<=sent->ownership.pending_epoch) return false;
+    h2h_pocket_record_t next=p->record;
+    if(next.ownership.epoch==next.ownership.pending_epoch) {
+        next.ownership.activated=false;next.ownership.reset_required=true;
+    } else if(!next.ownership.reset_required) return false;
+    /* Null owner in a privacy-minimal receipt is not current-owner authority.
+     * A fresh authorized sync must reconcile that period before it can play. */
+    next.ownership.pending_unbind[0]=0;next.ownership.pending_epoch=0;
+    return persist(p,&next,false,write,ctx);
 }

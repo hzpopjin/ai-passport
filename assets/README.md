@@ -52,3 +52,18 @@ Store reusable music and sound-effect sources in `music/`.
 Usage and regeneration commands: [H2H Pocket guide](../docs/assets/h2h-pocket.md).
 
 UI toolbar icons use four original 16 × 16 pixel masks in `images/h2h/icons.json`; `tools/h2h/build_icons.py` exports the matching `icons.c` RGB565A8 assets (3,072 bytes). The desktop preview reads the same masks. They require no emoji or symbol font.
+
+## STAYC native assets
+
+- `images/stayc/source/`: owner-supplied Pocket v15 visuals from commit `ff013044ebbeaf9c781b1a6c93bfc572b5cf4d89`. Original PNG/JSON files retain all six members, two outfits each, and 32 poses per outfit (384 total). These are existing fan-project images; their manifests retain generation and approval provenance. No official endorsement or commercial redistribution permission is asserted.
+- `images/stayc/stayc_visuals.bin`: 1,853,859-byte bounded RLE of RGB565+A8 display pixels. `sprites.c` preserves measured anchors, registration offsets and scene scales. One 15,360-byte decoded frame is resident. RGB888-to-RGB565 conversion reduces display color precision; the subsequent RLE is lossless. Regenerate with `python3 tools/h2h/pack_stayc_visuals.py assets/images/stayc/source --output assets/images/stayc`.
+- `images/stayc/actions.c`: phase tables adapted from the supplied original JS, plus three room geometries and decoration geometry. Phase/geometry exports alone do not implement the complete v15 life, decoration and card-reaction state contract.
+- `music/stayc/track_000`–`track_011`: six actual STAYC full songs followed by their six chorus clips, transferred by the owner as existing Opus assets. The Ogg files total 2,778,319 bytes; the exact 40-byte packets embedded in firmware total 2,673,560 bytes. Extraction preserves packets without lossy re-encoding. Parameters are 16 kbps CBR Opus, mono, 48 kHz, 20 ms, decoded to 16-bit PCM. Catalog titles, durations and hashes are in `music/stayc/catalog.json`; recordings remain Git-ignored. Rights remain with their holders; no redistribution license was supplied.
+
+The native target selects STAYC assets explicitly; the original H2H catalog remains
+separate. The [current native handoff](../docs/assets/h2h-agent-handoff.md#stayc-native-continuation)
+records implementation limits and validation.
+
+## Public distribution boundary
+
+Related copyright content is for personal learning and research only; commercial use is prohibited. See the [copyright and material notice](../docs/assets/copyright-notice.md). Supplied STAYC visuals/generated image data, reference JS/WASM, recorded reference traces and five directly adapted modules are excluded from Git; music remains excluded. The inventory above describes retained local materials, not a public license or download. MIT-covered source and OFL fonts retain their respective licenses.

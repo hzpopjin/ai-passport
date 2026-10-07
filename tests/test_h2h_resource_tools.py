@@ -15,9 +15,11 @@ class ResourceTools(unittest.TestCase):
         self.assertEqual(len(data),numbers['visual_payload_bytes']);self.assertEqual(len(data),233984)
         self.assertEqual(entry['manifest']['signature'],'');self.assertEqual(entry['member'],'IAN')
         self.assertEqual(numbers['default_resource_capacity'],0)
-        self.assertEqual(numbers['full_audio_visual_ab_excess_lower_bound'],1878203)
+        # This is the historical H2H A/B audit. The shared font grows with new UI
+        # glyphs, so the old byte count remains a lower bound, not a frozen total.
+        self.assertGreaterEqual(numbers['full_audio_visual_ab_excess_lower_bound'],1878203)
         self.assertEqual(numbers['app_bytes'],None)
-        self.assertEqual(numbers['known_embedded_data_lower_bound'],3411595)
+        self.assertEqual(numbers['known_embedded_data_lower_bound'],3156760+230400+3072+numbers['actual_font_bitmap_bytes'])
         with self.assertRaises(ValueError):budget.audit(0x6f0001)
         budget.audit(0x6f0000)
     def test_opt_in_layout_preserves_nvs_phy_and_has_no_ota(self):

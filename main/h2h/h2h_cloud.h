@@ -1,6 +1,8 @@
 #pragma once
 #include "esp_err.h"
 #include "h2h_pocket.h"
+#include "pocket_profile.h"
+#include "stayc_game.h"
 #include <stdbool.h>
 
 typedef enum {
@@ -16,9 +18,17 @@ typedef struct {
 } h2h_cloud_status_t;
 
 esp_err_t h2h_cloud_start(void);
+/* Volatile local-test barrier. True only after the worker finishes its current
+ * operation and releases Wi-Fi. Does not change ownership or stored state. */
+bool h2h_cloud_debug_pause(bool requested);
 void h2h_cloud_status(h2h_cloud_status_t *out);
 bool h2h_cloud_model(h2h_save_t *save, uint64_t *epoch, uint64_t *generation);
 bool h2h_cloud_local_save(uint64_t epoch, uint64_t generation, const h2h_save_t *save);
+/* 1=coherent current journal record,0=no full record,-1=locked/corrupt. */
+int h2h_cloud_game_record(uint64_t epoch,uint8_t bytes[164]);
+/* Only as a callback inside h2h_cloud_guarded_write; state mutex is held. */
+bool h2h_cloud_game_record_write_locked(const void *bytes,size_t length);
+void h2h_cloud_game_snapshot(uint64_t epoch,uint64_t generation,const stayc_game_save_t *game,uint32_t settled);
 bool h2h_cloud_can_play(void);
 bool h2h_cloud_can_play_at(uint64_t epoch, uint64_t generation);
 bool h2h_cloud_guarded_write(uint64_t epoch, uint64_t generation,
@@ -33,3 +43,9 @@ bool h2h_cloud_close(void);
 bool h2h_cloud_confirm(void);
 bool h2h_cloud_refresh(void);
 bool h2h_cloud_forget_wifi(void);
+
+/* Publish the real normal V4 wallet from the main loop, never infer it from hearts. */
+void h2h_cloud_game_stars(uint64_t epoch,uint64_t generation,uint32_t stars);
+
+/* Public account view only, copied under the owner mutex; never credentials. */
+void h2h_cloud_profile(pocket_profile_view_t *out);

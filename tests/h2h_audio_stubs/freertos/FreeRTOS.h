@@ -6,3 +6,4 @@ typedef int portMUX_TYPE;
 #define portEXIT_CRITICAL(m) ((void)(m))
 #define pdMS_TO_TICKS(ms) (ms)
 #define pdPASS 1
+#define pdTRUE 1

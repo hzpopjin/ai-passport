@@ -3,6 +3,8 @@
 #pragma once
 
 #include "esp_err.h"
+#include <stdbool.h>
+#include <stdint.h>
 
 // 按键索引。数量用 bsp_pins.h 的 BSP_BTN_COUNT(硬件属性,归引脚表管),
 // 这里不再定义尾项计数,避免出现 BSP_BTN_COUNT / BSP_BTN_COUNT_ 两个近似名字。
@@ -32,3 +34,15 @@ esp_err_t bsp_button_init(bsp_btn_cb_t cb, void *user);
 // ★ 换了分压/上拉阻值后,用它测出自己的三档电压,再改 bsp_pins.h 的 BSP_BTN_MV_TABLE。
 // 读取失败返回 -1。
 int bsp_button_read_mv(void);
+// Same averaged button poll and voltage windows, without another ADC read:
+// -1 released, -2 unavailable/error/stale (>100ms), otherwise a bsp_btn_t.
+// Intended for debounced polling state machines; no ADC access from callers.
+int bsp_button_read_key(void);
+typedef struct {
+    int key;
+    int64_t sampled_us,changed_us;
+    uint64_t sequence;
+} bsp_button_snapshot_t;
+/* One coherent timer sample, raw transition timestamp and sequence. Never
+ * reads ADC; stale/error samples fail. Consumers can reject missed transitions. */
+bool bsp_button_snapshot(bsp_button_snapshot_t *out);

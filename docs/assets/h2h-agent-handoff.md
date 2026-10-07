@@ -2,6 +2,14 @@
 
 # H2H Pocket agent handoff
 
+## STAYC native continuation
+
+The current application is on `feature/stayc-paired-firmware`. Use the [STAYC user guide](pocket.md), [development guide](stayc-development.md), [current storage contract](stayc-native-port-contract.md) and [phone JWT protocol](../development/pocket-phone-jwt.md). The remainder of this document is a historical H2H handoff, including its older Wi-Fi/QR, 48-byte cloud and MiniApp contracts; those are not the current default transport.
+
+The normal build uses phone-owned account JWTs and authenticated BLE full-save messages. Its full record is 164 bytes and its default partition layout remains NVS/PHY/factory. Avatar, resource and circular log candidates require separate layout acceptance. Physical card/phone/account acceptance remains unverified by this source review.
+
+Recordings, supplied STAYC visual/generated assets, reference JS/WASM, reference traces and five directly adapted gameplay source/header pairs remain local-only pending redistribution rights. A public clone cannot run the full STAYC gate. See the [copyright notice](copyright-notice.md) and [release-readiness review](../contribution/open-source-review.md). Do not treat a successful private-input build as a distributable firmware.
+
 ## Repository and scope
 
 Continue on `feature/h2h-pocket` in [hzpopjin/ai-passport](https://github.com/hzpopjin/ai-passport). Its parent is [FoloToy/ai-passport](https://github.com/FoloToy/ai-passport); the local application started from upstream commit `0b9e4c8`. Keep upstream `main` as the board/demo baseline. Read [AGENTS.md](../../AGENTS.md) first and use its task routing and five required skills. The original [application manual](h2h-pocket.md) remains authoritative for controls, persistence, audio and acceptance.

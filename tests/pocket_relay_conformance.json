@@ -1,0 +1,109 @@
+{
+  "synthetic_only": true,
+  "key_hex_test_only": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "vectors": [
+    {
+      "direction": "session",
+      "envelope": {
+        "version": 1,
+        "device_id": "0123456789abcdef0123456789abcdef",
+        "session_id": "abcdefabcdefabcdefabcdefabcdefab",
+        "request_id": "11111111111111111111111111111111",
+        "operation": "session",
+        "body_b64": "eyJhY2NvdW50X2lkIjozMTQsIm1vZGUiOiJwYWlyIiwidHRsIjozMDAsIm93bmVyc2hpcF9lcG9jaCI6NSwiZGV2aWNlX2FjdGl2YXRlZCI6ZmFsc2UsIm93bmVyX2F1dGhvcml6ZWQiOmZhbHNlfQ==",
+        "mac": "b96d20500dc2f4c625bbfa85445007522164904b76ab10c117804531e05699eb"
+      }
+    },
+    {
+      "direction": "request",
+      "envelope": {
+        "version": 1,
+        "device_id": "0123456789abcdef0123456789abcdef",
+        "session_id": "abcdefabcdefabcdefabcdefabcdefab",
+        "request_id": "22222222222222222222222222222222",
+        "operation": "begin",
+        "body_b64": "eyJleHBlY3RlZF9lcG9jaCI6NX0=",
+        "mac": "b1dc54aaa662d5eebe4536f1e3ee0f48758ed006f8e5ba34c69c881508a43aa9"
+      }
+    },
+    {
+      "direction": "response",
+      "envelope": {
+        "version": 1,
+        "device_id": "0123456789abcdef0123456789abcdef",
+        "session_id": "abcdefabcdefabcdefabcdefabcdefab",
+        "request_id": "33333333333333333333333333333333",
+        "operation": "sync",
+        "body_b64": "eyJvd25lcnNoaXBfZXBvY2giOjYsImFjY291bnRfaWQiOjMxNCwiYWN0aXZhdGVkIjp0cnVlLCJsb2NrZWQiOmZhbHNlLCJzYXZlX3N0YXR1cyI6InVuY2hhbmdlZCIsInNhdmUiOnsicmV2aXNpb24iOjcsInNjaGVtYSI6MSwiZGF0YSI6IlVFZ3lTQUVBQUFBb0FBQUFpQk1BQVA4QUFBQUJBQUFBQVFBQUFDTUFBQUFBQUFBQUFBQUFBQWdBQUFBUENwZFoiLCJzaGEyNTYiOiJkODhkNTMzZTdkYzc5MzgyOTA1ZTgzNDEwZGU1YmRhN2IzZWRlMjZkODlkYmE4MzNmZTFiN2NlZGFjZGZjNWExIn19",
+        "mac": "9e9c31f34f197a5a376ee87583cddcec9b3fad035dea3c2791ee226090641d8d"
+      }
+    },
+    {
+      "direction": "request",
+      "envelope": {
+        "version": 1,
+        "device_id": "0123456789abcdef0123456789abcdef",
+        "session_id": "abcdefabcdefabcdefabcdefabcdefab",
+        "request_id": "44444444444444444444444444444444",
+        "operation": "ack",
+        "body_b64": "eyJkZXZpY2VfaWQiOiIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsInNlc3Npb25faWQiOiJhYmNkZWZhYmNkZWZhYmNkZWZhYmNkZWZhYmNkZWZhYiIsImFjY291bnRfaWQiOjMxNCwib3duZXJzaGlwX2Vwb2NoIjo2LCJzYXZlX3JldmlzaW9uIjo3LCJzYXZlX3NoYTI1NiI6ImQ4OGQ1MzNlN2RjNzkzODI5MDVlODM0MTBkZTViZGE3YjNlZGUyNmQ4OWRiYTgzM2ZlMWI3Y2VkYWNkZmM1YTEiLCJhY3RpdmF0ZWQiOnRydWUsImxvY2tlZCI6ZmFsc2UsImR1cmFibGUiOnRydWUsImdhbWVfaGVhcnRzIjo0MCwiZ2FtZV9zdGFycyI6MjMsImxvY2FsX2dhbWVfc2NoZW1hIjo0LCJleHRlbmRlZF9zYXZlX2Nsb3VkX3N5bmNlZCI6ZmFsc2V9",
+        "mac": "f6b83cce81d7e536ade930a7872fd9c8691d7844d638b2912b82a51a76268aa0"
+      }
+    },
+    {
+      "direction": "response",
+      "envelope": {
+        "version": 1,
+        "device_id": "0123456789abcdef0123456789abcdef",
+        "session_id": "abcdefabcdefabcdefabcdefabcdefab",
+        "request_id": "44444444444444444444444444444444",
+        "operation": "ack",
+        "body_b64": "eyJkZXZpY2VfaWQiOiIwMTIzNDU2Nzg5YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZiIsInNlc3Npb25faWQiOiJhYmNkZWZhYmNkZWZhYmNkZWZhYmNkZWZhYmNkZWZhYiIsImFjY291bnRfaWQiOjMxNCwib3duZXJzaGlwX2Vwb2NoIjo2LCJzYXZlX3JldmlzaW9uIjo3LCJzYXZlX3NoYTI1NiI6ImQ4OGQ1MzNlN2RjNzkzODI5MDVlODM0MTBkZTViZGE3YjNlZGUyNmQ4OWRiYTgzM2ZlMWI3Y2VkYWNkZmM1YTEiLCJhY3RpdmF0ZWQiOnRydWUsImxvY2tlZCI6ZmFsc2UsImR1cmFibGUiOnRydWUsImdhbWVfaGVhcnRzIjo0MCwiZ2FtZV9zdGFycyI6MjMsImxvY2FsX2dhbWVfc2NoZW1hIjo0LCJleHRlbmRlZF9zYXZlX2Nsb3VkX3N5bmNlZCI6ZmFsc2UsImNvbXBsZXRlZCI6dHJ1ZX0=",
+        "mac": "fb19983f9d05907bc24685b5f09ec3609bdf20650e6a313f6faeb64f0b887bbc"
+      }
+    }
+  ],
+  "save48_b64": "UEgySAEAAAAoAAAAiBMAAP8AAAABAAAAAQAAACMAAAAAAAAAAAAAAAgAAAAPCpdZ",
+  "save48_sha256": "d88d533e7dc79382905e83410de5bda7b3ede26d89dba833fe1b7cedacdfc5a1",
+  "game_hearts": 40,
+  "game_stars": 23,
+  "extended_save_cloud_synced": false,
+  "rpc": {
+    "transaction_id": 4660,
+    "input_json_utf8": "{\"action\":\"open\",\"session\":{\"version\":1,\"device_id\":\"0123456789abcdef0123456789abcdef\",\"session_id\":\"abcdefabcdefabcdefabcdefabcdefab\",\"request_id\":\"11111111111111111111111111111111\",\"operation\":\"session\",\"body_b64\":\"eyJhY2NvdW50X2lkIjozMTQsIm1vZGUiOiJwYWlyIiwidHRsIjozMDAsIm93bmVyc2hpcF9lcG9jaCI6NSwiZGV2aWNlX2FjdGl2YXRlZCI6ZmFsc2UsIm93bmVyX2F1dGhvcml6ZWQiOmZhbHNlfQ==\",\"mac\":\"b96d20500dc2f4c625bbfa85445007522164904b76ab10c117804531e05699eb\"}}",
+    "input_frames_hex": [
+      "103412bd01",
+      "11341200007b22616374696f6e223a226f70656e",
+      "1134120f00222c2273657373696f6e223a7b2276",
+      "1134121e00657273696f6e223a312c2264657669",
+      "1134122d0063655f6964223a2230313233343536",
+      "1134123c00373839616263646566303132333435",
+      "1134124b0036373839616263646566222c227365",
+      "1134125a007373696f6e5f6964223a2261626364",
+      "1134126900656661626364656661626364656661",
+      "113412780062636465666162636465666162222c",
+      "113412870022726571756573745f6964223a2231",
+      "1134129600313131313131313131313131313131",
+      "113412a500313131313131313131313131313131",
+      "113412b40031222c226f7065726174696f6e223a",
+      "113412c3002273657373696f6e222c22626f6479",
+      "113412d2005f623634223a2265794a6859324e76",
+      "113412e1006457353058326c6b496a6f7a4d5451",
+      "113412f00073496d31765a4755694f694a775957",
+      "113412ff006c794969776964485273496a6f7a4d",
+      "1134120e01444173496d3933626d567963326870",
+      "1134121d016346396c6347396a614349364e5377",
+      "1134122c01695a47563261574e6c5832466a6447",
+      "1134123b016c325958526c5a4349365a6d467363",
+      "1134124a01325573496d3933626d567958324631",
+      "113412590164476876636d6c365a5751694f6d5a",
+      "11341268016862484e6c66513d3d222c226d6163",
+      "1134127701223a22623936643230353030646332",
+      "1134128601663463363235626266613835343435",
+      "1134129501303037353232313634393034623736",
+      "113412a401616231306331313738303435333165",
+      "113412b30130353639396562227d7d",
+      "123412"
+    ]
+  }
+}

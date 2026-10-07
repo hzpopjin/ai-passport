@@ -29,6 +29,9 @@ CONFIG_LV_FONT_MONTSERRAT_20=y
 
 # --- 系统 ---
 CONFIG_FREERTOS_HZ=1000
+# Actual autosave call frames exceed IDF's 3584-byte default. Transaction
+# copies are heap-bounded; leave measured headroom for NVS and UI call depth.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
 # --- H2H Pocket: bounded memory; account network is opt-in ---
 CONFIG_BT_ENABLED=y
@@ -38,7 +41,11 @@ CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
 CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
 CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
 CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
-CONFIG_BT_NIMBLE_NVS_PERSIST=n
+# Retain authenticated bonds across disconnects and card/app restarts. This
+# changes only BLE peer storage, not ownership records or flash security.
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+CONFIG_BT_NIMBLE_MAX_BONDS=3
+CONFIG_BT_NIMBLE_HANDLE_REPEAT_PAIRING_DELETION=n
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
 CONFIG_LV_USE_QRCODE=y
 CONFIG_LV_MEM_SIZE_KILOBYTES=48

@@ -11,6 +11,9 @@ static int create_calls, callback_calls, fail_create, fail_callback;
 static int fail_adc, fail_channel, fail_cal, fail_read, fail_convert, fail_delete;
 static int raw_mv, reads, events;
 static int64_t clock_us;
+static int critical_depth;
+void test_bsp_enter_critical(portMUX_TYPE *mux) { assert(mux==&s_sample_mux && !critical_depth); ++critical_depth; }
+void test_bsp_exit_critical(portMUX_TYPE *mux) { assert(mux==&s_sample_mux && critical_depth==1); --critical_depth; }
 
 esp_err_t adc_oneshot_new_unit(const adc_oneshot_unit_init_cfg_t *cfg, adc_oneshot_unit_handle_t *h) {
     assert(cfg->unit_id == BSP_BTN_ADC_UNIT && !adc_live);
@@ -26,6 +29,7 @@ esp_err_t adc_oneshot_config_channel(adc_oneshot_unit_handle_t h, int channel, c
     return fail_channel ? ESP_FAIL : ESP_OK;
 }
 esp_err_t adc_oneshot_read(adc_oneshot_unit_handle_t h, int channel, int *raw) {
+    assert(!critical_depth); // Slow ADC work must not run with interrupts masked.
     assert(h == &adc_token && adc_live && channel == BSP_BTN_ADC_CHANNEL);
     ++reads;
     if (fail_read) return ESP_FAIL;
@@ -99,6 +103,8 @@ static void check_voltage(int mv, int expected) {
         assert(s_drivers[i].base.get_key_level(&s_drivers[i].base) == (i == expected));
     }
     assert(reads - before == CONFIG_ADC_BUTTON_SAMPLE_TIMES);
+    assert(bsp_button_read_key()==expected);
+    assert(reads - before == CONFIG_ADC_BUTTON_SAMPLE_TIMES); // No competing ADC access.
 }
 int main(void) {
     for (int i = 1; i <= BSP_BTN_COUNT; ++i) {
@@ -117,6 +123,7 @@ int main(void) {
     assert(bsp_button_init(event_cb, &events) != ESP_OK); retry_success();
     assert(events == 0);
     assert(bsp_button_init(event_cb, &events) == ESP_OK);
+    assert(bsp_button_read_key()==-2); // No guessed release before the first poll.
     cb_click(NULL, (void *)(intptr_t)BSP_BTN_OK); assert(events == 1);
     cb_triple(NULL, (void *)(intptr_t)BSP_BTN_OK); assert(events == 2);
     check_voltage(0, BSP_BTN_UP); check_voltage(149, BSP_BTN_UP);
@@ -124,12 +131,23 @@ int main(void) {
     check_voltage(447, BSP_BTN_OK); check_voltage(1899, BSP_BTN_OK);
     check_voltage(1900, -1); check_voltage(3300, -1);
     assert(bsp_button_read_mv() == 3300);
+    check_voltage(500, BSP_BTN_OK);
+    bsp_button_snapshot_t sample;assert(bsp_button_snapshot(&sample)&&sample.key==BSP_BTN_OK&&sample.sampled_us==clock_us&&sample.changed_us==clock_us&&sample.sequence>0);
+    uint64_t sequence=sample.sequence;int64_t changed=sample.changed_us;
+    clock_us+=2000;assert(button_level(&s_drivers[BSP_BTN_OK].base));
+    assert(bsp_button_snapshot(&sample)&&sample.sequence==sequence&&sample.changed_us==changed&&sample.sampled_us==clock_us);
+    fail_read = 1; // ADC1 contention outside the completed button poll.
+    assert(bsp_button_read_mv()==-1 && bsp_button_read_key()==BSP_BTN_OK);
+    clock_us+=100001; assert(bsp_button_read_key()==-2); // Stale press cannot authorize a gesture.
+    assert(!bsp_button_snapshot(&sample)&&sample.key==-2);
     fail_read = 1; clock_us += 2000;
     for (int i = 0; i < BSP_BTN_COUNT; ++i) assert(!button_level(&s_drivers[i].base));
     assert(bsp_button_read_mv() == -1);
+    assert(bsp_button_read_key()==-2);
     fail_read = 0; fail_convert = 1; clock_us += 2000;
     for (int i = 0; i < BSP_BTN_COUNT; ++i) assert(!button_level(&s_drivers[i].base));
     assert(bsp_button_read_mv() == -1);
+    assert(bsp_button_read_key()==-2);
     fail_delete = 1; button_cleanup();
     assert(adc_live && cal_live && live_buttons == BSP_BTN_COUNT);
     assert(bsp_button_init(event_cb, &events) == ESP_ERR_INVALID_STATE);
