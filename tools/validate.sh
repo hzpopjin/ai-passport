@@ -25,7 +25,7 @@ check_local_materials() {
         fi
     done
     if [[ "${missing}" == 1 ]]; then
-        echo "STAYC inputs are excluded pending redistribution permission. See docs/assets/stayc-development.md." >&2
+        echo "Optional group inputs are excluded pending redistribution permission. See docs/assets/pocket-development.md." >&2
         return 1
     fi
 }

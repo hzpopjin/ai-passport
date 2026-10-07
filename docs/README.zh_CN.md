@@ -200,7 +200,7 @@ LICENSE                  仓库许可证
 | 入口 | 你可以找到 |
 | --- | --- |
 | [Pocket 使用指南](assets/pocket.zh_CN.md) | 首次激活、按键、玩法、存档及常见问题 |
-| [Pocket 开发指南](assets/stayc-development.zh_CN.md) | 公开源码边界、本地前置输入、当前协议及构建流程 |
+| [Pocket 开发指南](assets/pocket-development.zh_CN.md) | 公开源码边界、本地前置输入、当前协议及构建流程 |
 | [开源前检查](contribution/open-source-review.zh_CN.md) · [版权声明](assets/copyright-notice.zh_CN.md) | 检查结果、排除材料、发布阻塞及仅供学习的版权内容 |
 | [开发指南](development/README.zh_CN.md) | AI 工作流、工程规范、CI 与发布流程 |
 | [AI 技能](../skills/README.zh_CN.md) | 开发、环境准备、构建、真机测试与故障诊断 |
@@ -222,7 +222,7 @@ AI 助手请从 [`AGENTS.md`](../AGENTS.md) 开始，再按任务路由读取相
 
 [IAN 小伙伴：操作、歌曲打包、预览与验收](assets/h2h-pocket.zh_CN.md)。
 - [Agent 接手文档](assets/h2h-agent-handoff.zh_CN.md)
-- [STAYC 原生移植契约与待补证据](assets/stayc-native-port-contract.zh_CN.md)
+- [Pocket 原生移植契约与待补证据](assets/pocket-native-port-contract.zh_CN.md)
 
 - [视觉资源格式、签名安装与 Flash 预算](development/pocket-resources.zh_CN.md)
 

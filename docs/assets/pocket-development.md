@@ -1,8 +1,8 @@
-[简体中文](stayc-development.zh_CN.md) · **English**
+[简体中文](pocket-development.zh_CN.md) · **English**
 
 # Pocket development guide
 
-Groups are optional content. This branch builds the STAYC example; the earlier H2H/IAN edition has separate materials and contracts. Arbitrary group switching is not implemented. Shared integration, verification and safety boundaries apply to the corresponding edition. The current application branch is `feature/stayc-paired-firmware`; `main` is the upstream board-test baseline. Start with [AGENTS.md](../../AGENTS.md), the [user guide](pocket.md), [copyright notice](copyright-notice.md) and [release-readiness review](../contribution/open-source-review.md). Historical H2H instructions describe a different application and transport.
+Pocket is the application name; groups and members are user-selectable content. The current local build inputs use a specific group set. The inventory retains its real paths for validation and rights review; file identifiers are not the project name. The current card implementation does not establish arbitrary runtime content-pack switching. The current application branch is `feature/pocket-paired-firmware`; `main` is the upstream board-test baseline. Start with [AGENTS.md](../../AGENTS.md), the [user guide](pocket.md), [copyright notice](copyright-notice.md) and [release-readiness review](../contribution/open-source-review.md). Historical H2H instructions describe a different application and transport.
 
 ## Public source and local prerequisites
 
@@ -36,7 +36,7 @@ If Homebrew OpenSSL is already installed on macOS, command-scoped `CPATH="$(brew
 
 ## Current firmware contract
 
-The normal build includes `h2h_phone` via `h2h_phone_bridge.c`. Account JWTs and backend requests remain on the phone. `h2h_cloud_legacy.c` is selected only by explicit legacy host-test configuration; it is not the default card transport. See the [phone protocol](../development/pocket-phone-jwt.md) and [native storage contract](stayc-native-port-contract.md).
+The normal build includes `h2h_phone` via `h2h_phone_bridge.c`. Account JWTs and backend requests remain on the phone. `h2h_cloud_legacy.c` is selected only by explicit legacy host-test configuration; it is not the default card transport. See the [phone protocol](../development/pocket-phone-jwt.md) and [native storage contract](pocket-native-port-contract.md).
 
 The default partitions remain NVS `0x9000/0x6000`, PHY `0xF000/0x1000` and factory `0x10000/0x7F0000`. Candidate resource/profile/log tables are review inputs and are not enabled by default. Do not confuse remaining application headroom with available resource capacity. Follow the [profile](../development/engineering/pocket-account-profile.md) and [diagnostics](../development/engineering/pocket-public-logs.md) documents for their data effects.
 
@@ -44,7 +44,7 @@ All non-LVGL-task rendering must hold the BSP LVGL lock. Button callbacks stay n
 
 ## Hardware acceptance and delivery
 
-A local build and host simulations do not establish real card/phone/account interoperability. Test startup, Chinese glyphs, button timing, all game/scene branches, audible playback/seek, BLE reconnect/PIN, activation, full-save conflict/restore, owner change, power loss and runtime heap/stack. The older browser preview targets H2H, not this STAYC application.
+A local build and host simulations do not establish real card/phone/account interoperability. Test startup, Chinese glyphs, button timing, all game/scene branches, audible playback/seek, BLE reconnect/PIN, activation, full-save conflict/restore, owner change, power loss and runtime heap/stack. The older browser preview targets H2H, not the current Pocket application.
 
 Before any flash, identify the exact device and verified image, check the existing layout, state its data impact and obtain approval. For a compatible existing minimal layout, a reviewed app-only segment at `0x10000` may preserve NVS/PHY; do not substitute an unverified image or padded `0x0` image. Follow the authoritative [flashing policy](../development/engineering/firmware-layout.md#flashing-and-stored-data). No firmware readback is a prerequisite and no full-chip erase is authorized by a build command.
 

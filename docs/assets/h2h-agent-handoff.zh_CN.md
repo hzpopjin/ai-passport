@@ -2,9 +2,9 @@
 
 # H2H Pocket agent 接手文档
 
-## STAYC 原生继续开发
+## Pocket 原生继续开发
 
-当前应用位于 `feature/stayc-paired-firmware`。使用 [STAYC 使用指南](pocket.zh_CN.md)、[开发指南](stayc-development.zh_CN.md)、[当前存储契约](stayc-native-port-contract.zh_CN.md)及[手机 JWT 协议](../development/pocket-phone-jwt.zh_CN.md)。本文后续部分是历史 H2H 交接，包括旧 Wi-Fi／二维码、48 字节云存档及小程序契约；它们不是当前默认通信流程。
+当前应用位于 `feature/pocket-paired-firmware`。使用 [Pocket 使用指南](pocket.zh_CN.md)、[开发指南](pocket-development.zh_CN.md)、[当前存储契约](pocket-native-port-contract.zh_CN.md)及[手机 JWT 协议](../development/pocket-phone-jwt.zh_CN.md)。本文后续部分是历史 H2H 交接，包括旧 Wi-Fi／二维码、48 字节云存档及小程序契约；它们不是当前默认通信流程。
 
 正常构建由手机持有账号 JWT，并通过经过认证的蓝牙传输完整存档消息。完整记录为 164 字节，默认布局仍为 NVS／PHY／factory。头像、资源及循环日志候选方案需要单独验收布局。实卡／手机／账号验收未被本次源码检查验证。
 

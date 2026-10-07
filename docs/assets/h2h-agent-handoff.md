@@ -2,9 +2,9 @@
 
 # H2H Pocket agent handoff
 
-## STAYC native continuation
+## Pocket native continuation
 
-The current application is on `feature/stayc-paired-firmware`. Use the [STAYC user guide](pocket.md), [development guide](stayc-development.md), [current storage contract](stayc-native-port-contract.md) and [phone JWT protocol](../development/pocket-phone-jwt.md). The remainder of this document is a historical H2H handoff, including its older Wi-Fi/QR, 48-byte cloud and MiniApp contracts; those are not the current default transport.
+The current application is on `feature/pocket-paired-firmware`. Use the [Pocket user guide](pocket.md), [development guide](pocket-development.md), [current storage contract](pocket-native-port-contract.md) and [phone JWT protocol](../development/pocket-phone-jwt.md). The remainder of this document is a historical H2H handoff, including its older Wi-Fi/QR, 48-byte cloud and MiniApp contracts; those are not the current default transport.
 
 The normal build uses phone-owned account JWTs and authenticated BLE full-save messages. Its full record is 164 bytes and its default partition layout remains NVS/PHY/factory. Avatar, resource and circular log candidates require separate layout acceptance. Physical card/phone/account acceptance remains unverified by this source review.
 

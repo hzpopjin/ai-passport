@@ -1,6 +1,6 @@
 <p align="right"><strong>简体中文</strong> · <a href="pocket-public-logs.md">English</a></p>
 
-# STAYC 公开循环诊断日志候选方案
+# Pocket 公开循环诊断日志候选方案
 
 这是产品专用候选方案，不是仓库默认分区，也不表示已经迁移实体卡。
 保留 `partitions.csv`，在隔离构建中组合

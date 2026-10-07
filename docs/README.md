@@ -206,7 +206,7 @@ provide reference material. Choose the entry that matches your task.
 | Resource | What you will find |
 | --- | --- |
 | [Pocket user guide](assets/pocket.md) | First activation, controls, play, saves and troubleshooting |
-| [Pocket development guide](assets/stayc-development.md) | Public source boundary, local inputs, current protocol and builds |
+| [Pocket development guide](assets/pocket-development.md) | Public source boundary, local inputs, current protocol and builds |
 | [Release-readiness review](contribution/open-source-review.md) · [Copyright notice](assets/copyright-notice.md) | Results, excluded materials, release blockers and learning-only copyright content |
 | [Development](development/README.md) | AI workflow, engineering conventions, CI, and release guidance |
 | [AI skills](../skills/README.md) | Development, environment setup, builds, device testing, and debugging |
@@ -228,7 +228,7 @@ AI agents: start with [`AGENTS.md`](../AGENTS.md) and follow its task-specific r
 
 [IAN companion: controls, music packing, preview and acceptance](assets/h2h-pocket.md).
 - [Agent handoff](assets/h2h-agent-handoff.md)
-- [STAYC native port contract and remaining evidence](assets/stayc-native-port-contract.md)
+- [Pocket native port contract and remaining evidence](assets/pocket-native-port-contract.md)
 
 - [Visual resource format, signed installation and Flash budget](development/pocket-resources.md)
 

@@ -4,7 +4,7 @@
 
 Related copyright content is for **personal learning and research only. Commercial use is prohibited**. Do not sell, bundle, monetize or commercially distribute music recordings, third-party images or other protected content without the rights holder's permission.
 
-Rights in songs, recordings and third-party artwork remain with the respective rights holders. Artist names and logos identify the referenced content and do not imply affiliation. This fan project is not an official STAYC, Hearts2Hearts or agency product, partnership or endorsement. A learning-purpose statement is not a license to copy, modify, redistribute or publicly perform protected content.
+Rights in songs, recordings and third-party artwork remain with the respective rights holders. Artist names and logos identify the referenced content and do not imply affiliation. This fan project is not an official product, partnership or endorsement by any referenced artist, group or agency. A learning-purpose statement is not a license to copy, modify, redistribute or publicly perform protected content.
 
 ## What the public repository includes
 

@@ -1,8 +1,8 @@
-**简体中文** · [English](stayc-native-port-contract.md)
+**简体中文** · [English](pocket-native-port-contract.md)
 
-# STAYC 原生玩法与存储契约
+# Pocket 原生玩法与存储契约
 
-本文描述获得授权的本地开发实现。原始 V4 模型最终源码尚未恢复；本地比较使用保留的 v15 WASM／JS 及较早 C 场景源码。这些参考材料、直接移植的玩法／模型、动画、生活、装饰、反应模块、运行轨迹及提供的图片因再分发许可待确认而排除出公开快照。本项目不声称完整恢复原始源码，也不声称公开版本可独立构建。参见[开发指南](stayc-development.zh_CN.md)及[版权声明](copyright-notice.zh_CN.md)。
+本文描述获得授权的本地开发实现。原始 V4 模型最终源码尚未恢复；本地比较使用保留的 v15 WASM／JS 及较早 C 场景源码。这些参考材料、直接移植的玩法／模型、动画、生活、装饰、反应模块、运行轨迹及提供的图片因再分发许可待确认而排除出公开快照。本项目不声称完整恢复原始源码，也不声称公开版本可独立构建。参见[开发指南](pocket-development.zh_CN.md)及[版权声明](copyright-notice.zh_CN.md)。
 
 ## 玩法边界
 

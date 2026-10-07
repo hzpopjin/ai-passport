@@ -1,6 +1,6 @@
 <p align="right"><a href="pocket-public-logs.zh_CN.md">简体中文</a> · <strong>English</strong></p>
 
-# STAYC public circular diagnostics candidate
+# Pocket public circular diagnostics candidate
 
 This is a deliberate product candidate, not the repository default layout and
 not evidence of a device migration. Keep `partitions.csv` unchanged. Build in

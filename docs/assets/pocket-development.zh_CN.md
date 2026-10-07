@@ -1,8 +1,8 @@
-**简体中文** · [English](stayc-development.md)
+**简体中文** · [English](pocket-development.md)
 
 # Pocket 开发指南
 
-团体是可选内容；当前分支构建 STAYC 示例，旧版 H2H／IAN 另有独立材料与契约，不代表已有任意团体切换功能。通用集成、验证和安全边界适用于对应版本。当前应用分支为 `feature/stayc-paired-firmware`，`main` 是上游板级测试基线。先阅读 [AGENTS.md](../../AGENTS.md)、[使用指南](pocket.zh_CN.md)、[版权声明](copyright-notice.zh_CN.md)和[开源前检查](../contribution/open-source-review.zh_CN.md)。历史 H2H 文档描述的是其他应用及通信流程。
+Pocket 是应用名称，团体／成员是用户可选内容。当前源树的本地构建材料使用一个具体团体集合；下表保留其真实文件路径，用于验证与授权核对。文件标识不是项目名称。当前卡片实现不证明已支持任意内容包的运行时切换。当前应用分支为 `feature/pocket-paired-firmware`，`main` 是上游板级测试基线。先阅读 [AGENTS.md](../../AGENTS.md)、[使用指南](pocket.zh_CN.md)、[版权声明](copyright-notice.zh_CN.md)和[开源前检查](../contribution/open-source-review.zh_CN.md)。历史 H2H 文档描述的是其他应用及通信流程。
 
 ## 公开源码与本地前置材料
 
@@ -36,7 +36,7 @@ macOS 已安装 Homebrew OpenSSL 时，可使用仅针对当前命令的 `CPATH=
 
 ## 当前固件契约
 
-正常构建通过 `h2h_phone_bridge.c` 使用 `h2h_phone`。账号 JWT 及后端请求留在手机。只有显式选择旧版主机测试配置时才使用 `h2h_cloud_legacy.c`，它不是默认卡片通信方式。参见[手机协议](../development/pocket-phone-jwt.zh_CN.md)及[原生存储契约](stayc-native-port-contract.zh_CN.md)。
+正常构建通过 `h2h_phone_bridge.c` 使用 `h2h_phone`。账号 JWT 及后端请求留在手机。只有显式选择旧版主机测试配置时才使用 `h2h_cloud_legacy.c`，它不是默认卡片通信方式。参见[手机协议](../development/pocket-phone-jwt.zh_CN.md)及[原生存储契约](pocket-native-port-contract.zh_CN.md)。
 
 默认分区保持 NVS `0x9000/0x6000`、PHY `0xF000/0x1000`、factory `0x10000/0x7F0000`。资源／资料／日志候选分区表用于评审，默认不开启。应用分区剩余空间不等于资源可用容量。资料和诊断的数据影响分别见[资料文档](../development/engineering/pocket-account-profile.zh_CN.md)及[诊断文档](../development/engineering/pocket-public-logs.zh_CN.md)。
 
@@ -44,7 +44,7 @@ macOS 已安装 Homebrew OpenSSL 时，可使用仅针对当前命令的 `CPATH=
 
 ## 实卡验收与交付
 
-本地构建和主机模拟不能证明真实卡片／手机／账号互通。需要测试启动、中文字形、按键时序、全部游戏／场景分支、实际声音及快进退、蓝牙重连／配对码、激活、完整存档冲突／恢复、归属切换、断电及运行时 heap／栈。旧浏览器预览针对 H2H，不是本 STAYC 应用。
+本地构建和主机模拟不能证明真实卡片／手机／账号互通。需要测试启动、中文字形、按键时序、全部游戏／场景分支、实际声音及快进退、蓝牙重连／配对码、激活、完整存档冲突／恢复、归属切换、断电及运行时 heap／栈。旧浏览器预览针对 H2H，不是当前 Pocket 应用。
 
 任何刷写前，先识别准确设备与已验证镜像，核对现有布局，说明数据影响并获得批准。现有最小布局兼容时，经评审的 app 单段 `0x10000` 写入可保留 NVS／PHY；不得换用未验证镜像或填充的 `0x0` 镜像。遵循[刷写政策](../development/engineering/firmware-layout.zh_CN.md)。读取备份原固件不是前置条件，构建命令也不授权全片擦除。
 

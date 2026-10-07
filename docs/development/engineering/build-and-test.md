@@ -163,7 +163,7 @@ recovery. They need only a host C compiler and Python, not ESP-IDF or downloaded
 Managed Components. They do not establish real timing, electrical behavior or
 device compatibility; the firmware gate compiles against the pinned dependencies.
 
-The paired STAYC gate additionally runs the genuine v15 WASM/native gameplay
+The paired Pocket gate additionally runs the genuine v15 WASM/native gameplay
 traces, real browser JS/WASM player comparison, local extension codec/restore
 faults and the actual cloud/main integration against host SDK stubs. These need
 Node.js, Python, a host C compiler and OpenSSL development libraries. The cJSON

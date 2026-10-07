@@ -2,11 +2,11 @@
 
 # Pocket user guide
 
-Pocket is a companion application for AI Passport, with groups and members as optional content. Editions can use different group artwork, music and room configurations; this guide is the common entry point for everyday controls, music, games and saves. The public branch is a development snapshot; it does not include a ready-to-flash image or all required private materials. See the [development guide](stayc-development.md) if you are starting from source, and the [copyright notice](copyright-notice.md) before using media.
+Pocket is a companion application for AI Passport, with groups and members as optional content. Group content packs provide artwork, music and room configurations; this guide is the common entry point for everyday controls, music, games and saves. The public branch is a development snapshot; it does not include a ready-to-flash image or all required private materials. See the [development guide](pocket-development.md) if you are starting from source, and the [copyright notice](copyright-notice.md) before using media.
 
-## Choose your edition
+## Choose your content
 
-Check the installed Pocket edition, included group/members and authorized media first. **STAYC is an optional edition, not the only content direction for Pocket**; the earlier H2H/IAN edition has its [own guide](h2h-pocket.md). The current development branch compiles the STAYC selection. It does not establish arbitrary runtime group switching or arbitrary downloadable group packs. Changing editions requires matching firmware, assets and a save-compatibility plan from the maintainer. Member, song and outfit counts depend on the installed edition.
+Choose a group and member from the content available to your device and compatible phone client. The group determines artwork, songs and outfits; it does not change the application name, Pocket. Check that the resource set is authorized and supported by the installed firmware. Available groups, members and song counts depend on that configuration. Content-pack changes require matching firmware/resources and compatible saves; consult the [development guide](pocket-development.md) for the current implementation boundaries.
 
 ## Start here
 
@@ -41,12 +41,12 @@ In the player, make three presses of the **same** direction within 800 ms betwee
 
 ## Explore and collect
 
-- Members, outfits, rooms and interactions depend on the installed edition. For example, the current optional STAYC local set has six members, two outfits per member, three rooms and eight rich interactions. Its supplied media is not distributed in the public repository.
+- Members, outfits, rooms and interactions depend on the selected content pack. Supplied media is not distributed in the public repository.
 - Music played through the PCM output earns one heart per 120 seconds of successfully written audio. Pauses, countdowns and skipped time earn none; this accounting does not measure whether you heard sound.
 - Complete games, life activities and journey goals to earn the rewards shown in the interface. Leaving a game or scene early does not earn its completion reward. Some accomplishments pay only once.
 - Every five cumulative hearts unlock a missing card until all eight are owned. Hearts and shop stars are separate: purchases spend stars. Account website points are a third, independent balance.
 - Previewing or cancelling a shop choice does not spend stars. A purchase finishes only after the selected change is durably saved; a storage failure keeps the prior balance and equipment.
-- The fan badge displays a chosen owned card. A legacy third outfit record may remain from an older save; the current STAYC example offers its two actual outfits; other editions follow their own real materials.
+- The fan badge displays a chosen owned card. A legacy third outfit record may remain from an older save; selectable outfits follow the actual resources in your chosen content pack.
 
 ## Saves, account information and privacy
 

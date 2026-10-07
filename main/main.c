@@ -110,7 +110,7 @@ static void key_callback(bsp_btn_t key,bsp_btn_ev_t event,void *user) {
     if(input_queue) (void)xQueueSend(input_queue,&input,0);
 }
 void app_main(void) {
-    ESP_LOGI(TAG,"STAYC Pocket / six members / paired full and chorus Opus 16 kbps");
+    ESP_LOGI(TAG,"Pocket / optional group content / full and chorus Opus 16 kbps");
     h2h_model_t model; h2h_init(&model,h2h_track_count,h2h_song_count,esp_random());
     stayc_control_t visuals={0};uint64_t visual_epoch=UINT64_MAX;
     h2h_activation(&model,false);

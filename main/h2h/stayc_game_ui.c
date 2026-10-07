@@ -20,7 +20,7 @@ LV_FONT_DECLARE(h2h_font_16);
 #define LEMON 0xffea8au
 #define MUTED 0x6b8296u
 
-static const char *const home_names[]={"STAYC 小房间","随身听","口袋游乐场","收藏册","应援牌","设置","用户信息"};
+static const char *const home_names[]={"小房间","随身听","口袋游乐场","收藏册","应援牌","设置","用户信息"};
 static const char *const room_actions[]={"打个招呼","比个心","逛逛衣橱","挑选背景","一起生活","布置房间","选择成员","丰富互动"};
 static const char *const journey_names[]={"向成员打招呼","接接乐达到80分","记住4步舞蹈","完成3场游戏","听满两分钟","收藏4张卡片"};
 static const char *const card_names[]={"初见晴空","柠檬心事","海风来信","比心时刻","粉色舞台","夏日星光","一起跳舞","心动满格"};
@@ -156,12 +156,12 @@ static void build(const stayc_game_t *m,const stayc_control_t *v) {
     lv_obj_set_style_bg_color(screen,lv_color_hex(CREAM),0);lv_obj_set_style_bg_opa(screen,LV_OPA_COVER,0);lv_obj_remove_flag(screen,LV_OBJ_FLAG_SCROLLABLE);
     memset(rows,0,sizeof(rows));memset(row_text,0,sizeof(row_text));memset(falling,0,sizeof(falling));
     detail=progress=progress_text=basket=background=actor=foreground=NULL;compact_actor=false;
-    title=text(screen,22,12,112,"STAYC",INK);h2h_header_create(&header,screen);
+    title=text(screen,22,12,112,"Pocket",INK);h2h_header_create(&header,screen);
     box(screen,16,285,208,1,BLUE,0);hint=text(screen,20,291,200,stayc_game_footer_hint(m),INK);centered(hint);
-    const char *name="STAYC";char line[144];unsigned member=v?v->member%6:0;
+    const char *name="Pocket";char line[144];unsigned member=v?v->member%6:0;
     switch(m->page) {
     case STAYC_GAME_HOME:
-        scene(true,56,60,512,false);name=m->selection%7==6?"用户信息":"STAYC 小房间";
+        scene(true,56,60,512,false);name=m->selection%7==6?"用户信息":"小房间";
         for(unsigned i=0;i<7;i++)box(screen,85+(int)i*10,231,5,5,i==m->selection?INK:BLUE,3);
         row(0,246,33,home_names[m->selection%7],true,false);centered(row_text[0]);break;
     case STAYC_GAME_ROOM:
@@ -173,7 +173,7 @@ static void build(const stayc_game_t *m,const stayc_control_t *v) {
         centered(text(screen,20,222,200,m->selection==2?item_name(STAYC_GAME_SHOP_OUTFIT,m->save.outfit):m->selection==3?item_name(STAYC_GAME_SHOP_ROOM,m->save.room):m->selection==6?"六位成员，一起在小屋":m->selection==7?"八种互动，慢慢陪伴":"",INK));
         row(0,246,33,room_actions[m->selection%8],true,false);centered(row_text[0]);break;
     case STAYC_GAME_WARDROBE:
-        name="STAYC 衣橱";wallet(m);wardrobe_stage();scene(false,56,60,512,true);picker(m,STAYC_GAME_SHOP_OUTFIT,m->selection,2);break;
+        name="衣橱";wallet(m);wardrobe_stage();scene(false,56,60,512,true);picker(m,STAYC_GAME_SHOP_OUTFIT,m->selection,2);break;
     case STAYC_GAME_ROOM_PICKER:
         name="背景陈列";wallet(m);scene(true,56,60,512,true);picker(m,STAYC_GAME_SHOP_ROOM,m->selection,3);break;
     case STAYC_GAME_DECOR_PICKER:
@@ -216,14 +216,14 @@ static void build(const stayc_game_t *m,const stayc_control_t *v) {
         break;
     }
     case STAYC_GAME_ARCADE: {
-        name="口袋游乐场";centered(text(screen,20,49,200,"离线也能一起玩",INK));const char *labels[]={"柠檬接接乐","跟着 STAYC 跳","心动护照"};for(unsigned i=0;i<3;i++)row(i,83+(int)i*49,32,labels[i],m->selection==i,false);
+        name="口袋游乐场";centered(text(screen,20,49,200,"离线也能一起玩",INK));const char *labels[]={"柠檬接接乐","一起跳舞","心动护照"};for(unsigned i=0;i<3;i++)row(i,83+(int)i*49,32,labels[i],m->selection==i,false);
         const char *tips[]={"●1分 ♥3分 连击加分","记住动作，再按左右键","每枚章 +2爱心 +2星星"};centered(text(screen,20,219,200,tips[m->selection%3],INK));
         snprintf(line,sizeof(line),"最高 %lu分  默契 %lu步",(unsigned long)m->save.best_score,(unsigned long)m->save.echo_best);centered(text(screen,20,241,200,line,INK));break;
     }
     case STAYC_GAME_JOURNEY:
         name="心动护照";for(unsigned i=0;i<6;i++)row(i,49+(int)i*34,31,"",m->selection==i,((m->save.journey_claims|m->settled_claims)&(1u<<i))!=0);detail=text(screen,20,260,200,"",INK);centered(detail);break;
     case STAYC_GAME_ECHO:
-        name="跟着 STAYC 跳";box(screen,12,43,216,232,SKY,16);detail=text(screen,24,51,192,"",INK);centered(detail);scene(false,88,70,256,false);
+        name="一起跳舞";box(screen,12,43,216,232,SKY,16);detail=text(screen,24,51,192,"",INK);centered(detail);scene(false,88,70,256,false);
         progress_text=text(screen,24,151,192,"",INK);centered(progress_text);
         for(unsigned i=0;i<2;i++){rows[i]=box(screen,34+(int)i*96,186,76,49,0xffffff,11);row_text[i]=text(rows[i],8,14,60,i?"右 →":"← 左",INK);centered(row_text[i]);}
         row_text[2]=text(screen,24,246,192,"",INK);centered(row_text[2]);break;
@@ -245,7 +245,7 @@ static void build(const stayc_game_t *m,const stayc_control_t *v) {
     case STAYC_GAME_CARD:
         name="心动收藏";box(screen,18,44,204,226,m->selection%2?PINK:SKY,15);centered(text(screen,29,55,182,card_names[m->selection%8],INK));scene(true,56,77,512,false);centered(text(screen,44,239,152,stayc_members[member],INK));break;
     case STAYC_GAME_BADGE:
-        name="STAYC 应援牌";scene(true,56,73,512,false);centered(text(screen,22,51,196,stayc_members[member],INK));detail=text(screen,20,251,200,m->save.badge_card<8?card_names[m->save.badge_card]:"STAYC",INK);centered(detail);break;
+        name="应援牌";scene(true,56,73,512,false);centered(text(screen,22,51,196,stayc_members[member],INK));detail=text(screen,20,251,200,m->save.badge_card<8?card_names[m->save.badge_card]:"Pocket",INK);centered(detail);break;
     case STAYC_GAME_SETTINGS: {
         name="设置";char volume[64],countdown[64],mode[80];snprintf(volume,sizeof(volume),"音量  %lu%%",(unsigned long)m->save.volume);snprintf(countdown,sizeof(countdown),"倒计时  %s",m->save.countdown&1u?"开":"关");snprintf(mode,sizeof(mode),"模式  %s",modes[m->save.mode%3]);const char *labels[]={volume,countdown,mode,"用户信息",m->debug_mode?"开发调试  开":"开发调试  关"};for(unsigned i=0;i<5;i++)row(i,58+(int)i*38,32,labels[i],m->selection==i,false);
         if(m->debug_mode||m->selection==4)centered(text(screen,20,254,200,m->debug_mode?"DEV 临时测试，不保存":"全解锁，退出恢复",INK));

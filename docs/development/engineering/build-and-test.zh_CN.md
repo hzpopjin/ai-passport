@@ -146,7 +146,7 @@ cc -std=c11 -Wall -Wextra -Werror -Imain \
 
 静态门禁还将真实 BSP 和 demo 实现与轻量平台桩编译在一起，故障注入覆盖任务退出交接与停止重试、录音失败、Wi-Fi/BLE 启动回滚、按键分配与 ADC 错误、LVGL 初始化锁与重试、codec 打开/休眠/唤醒恢复。只需主机 C 编译器和 Python，不依赖 ESP-IDF 或已下载的 Managed Components。这些测试不代表真实时序、电气行为或设备兼容性；固件门禁会使用锁定依赖进行编译。
 
-配对 STAYC 门禁还执行真实 v15 WASM／原生玩法轨迹、真实浏览器 JS／WASM 播放器
+Pocket 配对门禁还执行真实 v15 WASM／原生玩法轨迹、真实浏览器 JS／WASM 播放器
 比较、本地扩展 codec／恢复故障，以及真实 cloud／main 的主机 SDK 桩集成测试。
 这些需 Node.js、Python、主机 C 编译器及 OpenSSL 开发库。cJSON 测试依赖以逐文件
 SHA256 固定；可用命令作用域的 `H2H_CJSON_DIR` 指向已核验 cJSON 1.7.19 目录，

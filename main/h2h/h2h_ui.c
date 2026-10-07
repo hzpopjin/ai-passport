@@ -17,7 +17,7 @@ extern const lv_image_dsc_t *const h2h_icons[4];
 #define BLUE 0x80BBE6
 #define PINK 0xF7CDD9
 #define LEMON 0xFFEA8A
-static const char *home_names[] = {"STAYC 小房间","随身听","星星接接乐","收藏册","应援牌","设置"};
+static const char *home_names[] = {"小房间","随身听","星星接接乐","收藏册","应援牌","设置"};
 static const char *card_names[] = {"初见晴空","柠檬心事","海风来信","比心时刻","粉色舞台","夏日星光","一起跳舞","心动满格"};
 static const char *modes[] = {"顺序循环","随机播放","单曲循环"};
 static const char *outfits[] = {"初始造型","运动短裤套装"};
@@ -137,10 +137,10 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
         lv_label_set_long_mode(guide,LV_LABEL_LONG_WRAP); center_text(guide);
         lv_screen_load(screen); if(previous) lv_obj_delete(previous); return;
     }
-    title=text(screen,24,12,112,"STAYC",INK);
+    title=text(screen,24,12,112,"Pocket",INK);
     h2h_header_create(&header,screen);
     hint=text(screen,20,286,200,"↑ ↓ 选择   ● 打开",INK); center_text(hint);
-    const char *name="STAYC";
+    const char *name="Pocket";
     switch(m->page) {
     case H2H_HOME:
         room_decor(m->save.room); make_sprite(88,94,512);
@@ -245,7 +245,7 @@ static void build(const h2h_model_t *m, const h2h_cloud_status_t *cloud, bool bl
     case H2H_BADGE:
         name=stayc_members[visuals->member]; room_decor(m->save.room); make_sprite(88,113,512);
         center_text(text(screen,22,51,196,stayc_members[visuals->member],INK));
-        detail=text(screen,20,251,200,m->save.badge_card<8?card_names[m->save.badge_card]:"STAYC",INK); center_text(detail);
+        detail=text(screen,20,251,200,m->save.badge_card<8?card_names[m->save.badge_card]:"Pocket",INK); center_text(detail);
         for(int i=0;i<4;i++) hearts[i]=text(screen,27+i*53,103+i*29,20,"♥",0xEAAFCA);
         lv_label_set_text(hint,"长按确定返回"); break;
     case H2H_SETTINGS: {

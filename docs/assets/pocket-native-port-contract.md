@@ -1,8 +1,8 @@
-[简体中文](stayc-native-port-contract.zh_CN.md) · **English**
+[简体中文](pocket-native-port-contract.zh_CN.md) · **English**
 
-# STAYC native gameplay and storage contract
+# Pocket native gameplay and storage contract
 
-This document describes the authorized local development implementation. The final original V4 model source was not recovered; local comparisons use the retained v15 WASM/JS and older C scene sources. Those references, directly adapted game/model, motion, life, decoration and reaction modules, trace fixtures and supplied art are excluded from the public snapshot pending redistribution permission. No complete original-source recovery or independently buildable public release is claimed. See the [development guide](stayc-development.md) and [copyright notice](copyright-notice.md).
+This document describes the authorized local development implementation. The final original V4 model source was not recovered; local comparisons use the retained v15 WASM/JS and older C scene sources. Those references, directly adapted game/model, motion, life, decoration and reaction modules, trace fixtures and supplied art are excluded from the public snapshot pending redistribution permission. No complete original-source recovery or independently buildable public release is claimed. See the [development guide](pocket-development.md) and [copyright notice](copyright-notice.md).
 
 ## Gameplay boundaries
 

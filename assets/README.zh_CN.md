@@ -59,7 +59,7 @@
 - `music/stayc/track_000`–`track_011`：所有者传入的既有 Opus 资源，依次为六首真实 STAYC 全曲及对应六段副歌。Ogg 合计 2,778,319 字节，固件嵌入的原样 40 字节数据包合计 2,673,560 字节。提取保留数据包，不进行有损重编码。参数为 16 kbps CBR Opus、单声道、48 kHz、20 ms，解码为 16 位 PCM。曲名、时长与哈希见 `music/stayc/catalog.json`；录音保持 Git 忽略。权利归权利人，未提供再分发许可。
 
 原生目标明确选择 STAYC 素材，原 H2H 目录独立保留。
-[当前原生交接](../docs/assets/h2h-agent-handoff.zh_CN.md#stayc-原生继续开发)
+[当前原生交接](../docs/assets/h2h-agent-handoff.zh_CN.md#pocket-原生继续开发)
 记录实现边界与验证结果。
 
 ## 公开分发边界

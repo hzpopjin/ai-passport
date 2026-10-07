@@ -61,7 +61,7 @@ UI toolbar icons use four original 16 × 16 pixel masks in `images/h2h/icons.jso
 - `music/stayc/track_000`–`track_011`: six actual STAYC full songs followed by their six chorus clips, transferred by the owner as existing Opus assets. The Ogg files total 2,778,319 bytes; the exact 40-byte packets embedded in firmware total 2,673,560 bytes. Extraction preserves packets without lossy re-encoding. Parameters are 16 kbps CBR Opus, mono, 48 kHz, 20 ms, decoded to 16-bit PCM. Catalog titles, durations and hashes are in `music/stayc/catalog.json`; recordings remain Git-ignored. Rights remain with their holders; no redistribution license was supplied.
 
 The native target selects STAYC assets explicitly; the original H2H catalog remains
-separate. The [current native handoff](../docs/assets/h2h-agent-handoff.md#stayc-native-continuation)
+separate. The [current native handoff](../docs/assets/h2h-agent-handoff.md#pocket-native-continuation)
 records implementation limits and validation.
 
 ## Public distribution boundary
